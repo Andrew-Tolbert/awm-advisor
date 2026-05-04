@@ -1,47 +1,75 @@
 import { createBrowserRouter, RouterProvider, NavLink, Outlet } from 'react-router';
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from '@databricks/appkit-ui/react';
-import { AnalyticsPage } from './pages/analytics/AnalyticsPage';
-import { LakebasePage } from './pages/lakebase/LakebasePage';
+import { LayoutDashboard, FileText, Bot, MessageSquare } from 'lucide-react';
+import { PortfolioPage } from './pages/portfolio/PortfolioPage';
+import { DocumentsPage } from './pages/documents/DocumentsPage';
+import { AgentsPage } from './pages/agents/AgentsPage';
 import { GeniePage } from './pages/genie/GeniePage';
-import { FilesPage } from './pages/files/FilesPage';
 
-const navLinkClass = ({ isActive }: { isActive: boolean }) =>
-  `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-    isActive
-      ? 'bg-primary text-primary-foreground'
-      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-  }`;
+const NAV_ITEMS = [
+  { to: '/',          end: true,  icon: LayoutDashboard, label: 'Portfolio Intelligence' },
+  { to: '/documents', end: false, icon: FileText,        label: 'Document Intelligence'  },
+  { to: '/agents',    end: false, icon: Bot,             label: 'Agent Orchestration'    },
+  { to: '/genie',     end: false, icon: MessageSquare,   label: 'Genie Chat'             },
+];
+
+function Sidebar() {
+  return (
+    <aside className="w-60 min-h-screen border-r bg-background flex flex-col flex-shrink-0">
+      {/* Header */}
+      <div className="px-5 py-5 border-b">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded bg-[#1a3a5c] flex items-center justify-center text-white text-xs font-bold tracking-wide">
+            GS
+          </div>
+          <div>
+            <div className="text-sm font-semibold text-foreground leading-tight">AWM Intelligence</div>
+            <div className="text-xs text-muted-foreground leading-tight">Goldman Sachs</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav className="flex-1 py-4 space-y-0.5 px-2">
+        {NAV_ITEMS.map(({ to, end, icon: Icon, label }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={end}
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+                isActive
+                  ? 'border-l-[3px] border-[#1a3a5c] bg-[#1a3a5c]/5 text-foreground font-medium pl-[9px]'
+                  : 'border-l-[3px] border-transparent text-muted-foreground hover:bg-muted hover:text-foreground pl-[9px]'
+              }`
+            }
+          >
+            <Icon className="w-4 h-4 flex-shrink-0" />
+            {label}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Advisor identity pill */}
+      <div className="px-4 py-4 border-t">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-[#1a3a5c] flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+            JC
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-foreground truncate">James Chen</div>
+            <div className="text-xs text-muted-foreground truncate">Managing Director, AWM</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
 
 function Layout() {
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <header className="border-b px-6 py-3 flex items-center gap-4">
-        <h1 className="text-lg font-semibold text-foreground">appkit-all-in-one</h1>
-        <nav className="flex gap-1">
-          <NavLink to="/" end className={navLinkClass}>
-            Home
-          </NavLink>
-          <NavLink to="/analytics" className={navLinkClass}>
-            Analytics
-          </NavLink>
-          <NavLink to="/lakebase" className={navLinkClass}>
-            Lakebase
-          </NavLink>
-          <NavLink to="/genie" className={navLinkClass}>
-            Genie
-          </NavLink>
-          <NavLink to="/files" className={navLinkClass}>
-            Files
-          </NavLink>
-        </nav>
-      </header>
-
-      <main className="flex-1 p-6">
+    <div className="min-h-screen bg-background flex">
+      <Sidebar />
+      <main className="flex-1 overflow-auto p-6">
         <Outlet />
       </main>
     </div>
@@ -52,61 +80,14 @@ const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: '/', element: <HomePage /> },
-      { path: '/analytics', element: <AnalyticsPage /> },
-      { path: '/lakebase', element: <LakebasePage /> },
-      { path: '/genie', element: <GeniePage /> },
-      { path: '/files', element: <FilesPage /> },
+      { path: '/',          element: <PortfolioPage /> },
+      { path: '/documents', element: <DocumentsPage /> },
+      { path: '/agents',    element: <AgentsPage /> },
+      { path: '/genie',     element: <GeniePage /> },
     ],
   },
 ]);
 
 export default function App() {
   return <RouterProvider router={router} />;
-}
-
-function HomePage() {
-  return (
-    <div className="max-w-2xl mx-auto space-y-6 mt-8">
-      <div className="text-center">
-        <h2 className="text-3xl font-bold mb-2 text-foreground">
-          Welcome to your Databricks App
-        </h2>
-        <p className="text-lg text-muted-foreground">
-          Powered by Databricks AppKit
-        </p>
-      </div>
-
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle>Getting Started</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Your app is ready. Explore the resources below to continue building.</p>
-          <ul className="space-y-2 text-sm">
-            <li>
-              <a
-                href="https://github.com/databricks/appkit"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary underline underline-offset-4 hover:text-primary/80"
-              >
-                AppKit on GitHub →
-              </a>
-            </li>
-            <li>
-              <a
-                href="https://databricks.github.io/appkit/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary underline underline-offset-4 hover:text-primary/80"
-              >
-                AppKit documentation →
-              </a>
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
-    </div>
-  );
 }

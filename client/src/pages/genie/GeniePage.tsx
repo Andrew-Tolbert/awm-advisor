@@ -2,14 +2,14 @@ import { GenieChat } from '@databricks/appkit-ui/react';
 
 export function GeniePage() {
   return (
-    <div className="space-y-6 w-full max-w-4xl mx-auto">
+    <div className="flex flex-col h-full space-y-6 w-full">
       <div>
         <h2 className="text-2xl font-bold text-foreground">Genie</h2>
         <p className="text-sm text-muted-foreground mt-1">
           Ask questions about your data using Databricks AI/BI Genie.
         </p>
       </div>
-      <div className="h-[600px] border rounded-lg overflow-hidden">
+      <div className="flex-1 min-h-[600px] border rounded-lg overflow-hidden">
         <GenieChat alias="default" />
       </div>
     </div>
