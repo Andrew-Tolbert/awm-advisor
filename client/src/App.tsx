@@ -89,8 +89,10 @@ function Layout() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="min-h-screen overflow-auto p-6 pl-[115px]">
-        <Outlet />
+      <main className="ml-[75px] min-h-screen overflow-auto">
+        <div className="mx-auto max-w-[1400px] px-10 py-6">
+          <Outlet />
+        </div>
       </main>
       <PortfolioAssistant />
     </div>
