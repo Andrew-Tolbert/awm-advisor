@@ -14,50 +14,69 @@ const NAV_ITEMS = [
 
 function Sidebar() {
   return (
-    <aside className="w-60 min-h-screen border-r bg-background flex flex-col flex-shrink-0">
-      {/* Header */}
-      <div className="px-5 py-5 border-b">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-[#1a3a5c] flex items-center justify-center text-white text-xs font-bold tracking-wide">
-            GS
-          </div>
-          <div>
-            <div className="text-sm font-semibold text-foreground leading-tight">AWM Intelligence</div>
-            <div className="text-xs text-muted-foreground leading-tight">Goldman Sachs</div>
-          </div>
-        </div>
+    <aside
+      className="group fixed top-0 left-0 z-40 h-screen w-[75px] hover:w-[280px] bg-[#0E1928] text-white flex flex-col overflow-hidden transition-[width] duration-200 ease-out"
+    >
+      {/* Logo header */}
+      <div className="relative h-[86px] flex-shrink-0 overflow-hidden">
+        {/* Collapsed: tiny Goldman wordmark */}
+        <img
+          src="/goldman-white-letters.png"
+          alt="Goldman Sachs"
+          className="absolute inset-y-0 left-0 w-[75px] h-full object-contain p-3 opacity-100 group-hover:opacity-0 transition-opacity duration-150"
+        />
+        {/* Expanded: full Goldman wordmark */}
+        <img
+          src="/goldman-white-letters.png"
+          alt=""
+          aria-hidden
+          className="absolute inset-0 h-full w-[280px] object-contain p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-75"
+        />
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 py-4 space-y-0.5 px-2">
+      <nav className="flex-1 pt-5 space-y-1">
         {NAV_ITEMS.map(({ to, end, icon: Icon, label }) => (
           <NavLink
             key={to}
             to={to}
             end={end}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${
+              `relative flex items-center h-14 text-sm transition-colors ${
                 isActive
-                  ? 'border-l-[3px] border-[#1a3a5c] bg-[#1a3a5c]/5 text-foreground font-medium pl-[9px]'
-                  : 'border-l-[3px] border-transparent text-muted-foreground hover:bg-muted hover:text-foreground pl-[9px]'
+                  ? 'text-white bg-white/[0.08]'
+                  : 'text-white/70 hover:text-white hover:bg-white/[0.05]'
               }`
             }
           >
-            <Icon className="w-4 h-4 flex-shrink-0" />
-            {label}
+            {({ isActive }) => (
+              <>
+                {isActive && (
+                  <span className="absolute left-0 top-0 bottom-0 w-[2px] bg-white" />
+                )}
+                <span className="w-[75px] flex-shrink-0 flex items-center justify-center">
+                  <Icon className="w-6 h-6" strokeWidth={1.5} />
+                </span>
+                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-75">
+                  {label}
+                </span>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
 
-      {/* Advisor identity pill */}
-      <div className="px-4 py-4 border-t">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#1a3a5c] flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-            JC
+      {/* Advisor identity */}
+      <div className="py-4">
+        <div className="flex items-center">
+          <div className="w-[75px] flex-shrink-0 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-semibold">
+              JC
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground truncate">James Chen</div>
-            <div className="text-xs text-muted-foreground truncate">Managing Director, AWM</div>
+          <div className="min-w-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-75">
+            <div className="text-sm font-medium text-white truncate">James Chen</div>
+            <div className="text-xs text-white/60 truncate">Managing Director, AWM</div>
           </div>
         </div>
       </div>
@@ -67,9 +86,9 @@ function Sidebar() {
 
 function Layout() {
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 overflow-auto p-6">
+      <main className="pl-[75px] min-h-screen overflow-auto p-6">
         <Outlet />
       </main>
     </div>
