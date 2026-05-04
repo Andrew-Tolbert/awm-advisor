@@ -6,6 +6,62 @@
 
 ---
 
+## Progress Checklist
+
+### Wireframe
+- [x] Sidebar navigation — GS identity, 4 nav links, active left-border style, advisor pill
+- [x] Page 1: Portfolio Intelligence Dashboard
+  - [x] 4 KPI stat cards (AUM, Perf vs Benchmark, Allocation Drift, Clients at Risk)
+  - [x] Asset Allocation donut chart (`asset_allocation.sql`)
+  - [x] Performance vs Benchmark area chart (`performance_timeseries.sql`)
+  - [x] Top 10 Holdings table with risk badges, clickable rows → `/documents`
+  - [x] Active Alerts feed — covenant alert → `/agents`, drift alert → `/documents`
+  - [x] Client Concentration Risk heatmap (`concentration_risk.sql`)
+- [x] Page 2: Document Intelligence
+  - [x] Left panel: holdings list with asset-class badges and alert dot
+  - [x] Left panel: document list (10-K, Earnings, CIM, Covenant)
+  - [x] KPI delta table with flag indicators
+  - [x] Covenant health gauge with APPROACHING BREACH warning
+  - [x] Management tone stacked bar
+  - [x] Source citations with quoted snippets
+  - [x] URL param sync (`?holding=<id>`) from Portfolio page
+- [x] Page 3: Agent Orchestration
+  - [x] Proactive alert banner with pulsing red dot
+  - [x] Agent cascade timeline with staggered animation (3 agents)
+  - [x] Expandable agent detail panels
+  - [x] Affected clients selector (3 clients, tab-style)
+  - [x] Editable draft communication textarea (per-client)
+  - [x] Approve & Send → success state with checkmark
+  - [x] Re-allocation scenario card
+  - [x] Audit trail footer
+- [x] Page 4: Genie Chat — full-width embed (removed max-w constraint)
+
+### Phase 2: Data & SQL
+- [x] `portfolio_summary.sql`
+- [x] `asset_allocation.sql`
+- [x] `performance_timeseries.sql`
+- [x] `top_holdings.sql`
+- [x] `concentration_risk.sql`
+- [x] `holdings_list.sql`
+- [x] `document_insights.sql` (parameterized by `:holding_id`)
+
+### Phase 3: Backend & Lakebase
+- [ ] `server/routes/agents/agent-routes.ts` — `GET /api/agents/cascade`, `POST /api/agents/approve`
+- [ ] Lakebase `app.agent_runs` table creation on server startup
+- [ ] Lakebase `app.client_communications` table creation on server startup
+- [ ] Seed one pending agent run on first boot
+- [ ] Wire approve/dismiss to actual Lakebase writes
+
+### Phase 4: Polish
+- [ ] GS color palette CSS variables (`#1a3a5c`, alert red, amber, green)
+- [ ] Loading skeletons on all data-driven sections
+- [ ] Error states on all `useAnalyticsQuery` calls
+- [ ] Empty states (0 holdings, 0 alerts)
+- [ ] Nav active style refinement
+- [ ] Responsive sidebar (icon-only on < 1024px) — optional
+
+---
+
 ## Tech Stack (already scaffolded)
 
 - **Frontend:** React + TypeScript, Tailwind CSS, shadcn/ui via `@databricks/appkit-ui/react`
