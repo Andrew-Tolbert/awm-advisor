@@ -1,5 +1,6 @@
 import { createApp, analytics, files, genie, lakebase, server } from '@databricks/appkit';
 import { setupSampleLakebaseRoutes } from './routes/lakebase/todo-routes';
+import { setupPortfolioChatRoute } from './routes/portfolio-chat';
 
 createApp({
   plugins: [
@@ -12,6 +13,7 @@ createApp({
 })
   .then(async (appkit) => {
     await setupSampleLakebaseRoutes(appkit);
+    setupPortfolioChatRoute(appkit);
     await appkit.server.start();
   })
   .catch(console.error);

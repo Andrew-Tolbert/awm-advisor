@@ -4,6 +4,7 @@ import { PortfolioPage } from './pages/portfolio/PortfolioPage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { AgentsPage } from './pages/agents/AgentsPage';
 import { GeniePage } from './pages/genie/GeniePage';
+import { PortfolioAssistant } from './components/PortfolioAssistant';
 
 const NAV_ITEMS = [
   { to: '/',          end: true,  icon: LayoutDashboard, label: 'Portfolio Intelligence' },
@@ -91,6 +92,7 @@ function Layout() {
       <main className="pl-[75px] min-h-screen overflow-auto p-6">
         <Outlet />
       </main>
+      <PortfolioAssistant />
     </div>
   );
 }
