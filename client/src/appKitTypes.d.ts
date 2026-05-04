@@ -8,12 +8,24 @@ declare module "@databricks/appkit-ui/react" {
     asset_allocation: {
         name: "asset_allocation";
         parameters: Record<string, never>;
-        result: unknown;
+        result: Array<{
+          /** @sqlType STRING */
+          asset_class: string;
+          /** @sqlType DECIMAL(3,1) */
+          pct_of_portfolio: number;
+        }>;
       };
     concentration_risk: {
         name: "concentration_risk";
         parameters: Record<string, never>;
-        result: unknown;
+        result: Array<{
+          /** @sqlType STRING */
+          asset_class: string;
+          /** @sqlType STRING */
+          client_name: string;
+          /** @sqlType DECIMAL(2,1) */
+          delta_pct: number;
+        }>;
       };
     document_insights: {
         name: "document_insights";
@@ -21,7 +33,20 @@ declare module "@databricks/appkit-ui/react" {
           /** any - use sql.*() */
           holding_id: SQLTypeMarker;
         };
-        result: unknown;
+        result: Array<{
+          /** @sqlType STRING */
+          kpi_name: string;
+          /** @sqlType STRING */
+          prior_value: string;
+          /** @sqlType STRING */
+          current_value: string;
+          /** @sqlType DECIMAL(3,1) */
+          change_pct: number;
+          /** @sqlType STRING */
+          flag: string;
+          /** @sqlType DECIMAL(1,1) */
+          covenant_value: number;
+        }>;
       };
     hello_world: {
         name: "hello_world";
@@ -29,12 +54,26 @@ declare module "@databricks/appkit-ui/react" {
           /** any - use sql.*() */
           message: SQLTypeMarker;
         };
-        result: unknown;
+        result: Array<{
+          /** @sqlType STRING */
+          value: string;
+        }>;
       };
     holdings_list: {
         name: "holdings_list";
         parameters: Record<string, never>;
-        result: unknown;
+        result: Array<{
+          /** @sqlType STRING */
+          holding_id: string;
+          /** @sqlType STRING */
+          name: string;
+          /** @sqlType STRING */
+          asset_class: string;
+          /** @sqlType STRING */
+          strategy: string;
+          /** @sqlType BOOLEAN */
+          has_alert: boolean;
+        }>;
       };
     mocked_sales: {
         name: "mocked_sales";
@@ -42,22 +81,64 @@ declare module "@databricks/appkit-ui/react" {
           /** any - use sql.*() */
           max_month_num: SQLTypeMarker;
         };
-        result: unknown;
+        result: Array<{
+          /** @sqlType STRING */
+          month: string;
+          /** @sqlType INT */
+          month_num: number;
+          /** @sqlType INT */
+          revenue: number;
+          /** @sqlType INT */
+          expenses: number;
+          /** @sqlType INT */
+          customers: number;
+        }>;
       };
     performance_timeseries: {
         name: "performance_timeseries";
         parameters: Record<string, never>;
-        result: unknown;
+        result: Array<{
+          /** @sqlType STRING */
+          month: string;
+          /** @sqlType DECIMAL(3,1) */
+          portfolio_return: number;
+          /** @sqlType DECIMAL(2,1) */
+          benchmark_return: number;
+        }>;
       };
     portfolio_summary: {
         name: "portfolio_summary";
         parameters: Record<string, never>;
-        result: unknown;
+        result: Array<{
+          /** @sqlType DECIMAL(2,1) */
+          total_aum_billions: number;
+          /** @sqlType DECIMAL(2,1) */
+          perf_vs_bench_pct: number;
+          /** @sqlType INT */
+          drift_count: number;
+          /** @sqlType INT */
+          clients_at_risk: number;
+        }>;
       };
     top_holdings: {
         name: "top_holdings";
         parameters: Record<string, never>;
-        result: unknown;
+        result: Array<{
+          /** @sqlType STRING */
+          holding_id: string;
+          /** @sqlType STRING */
+          name: string;
+          /** @sqlType STRING */
+          asset_class: string;
+          /** @sqlType DECIMAL(4,1) */
+          aum_millions: number;
+          /** @sqlType DECIMAL(2,1) */
+          pct_of_portfolio: number;
+          /** @sqlType DECIMAL(3,1) */
+          ytd_return: number;
+          /** @sqlType STRING */
+          risk_flag: string;
+        }>;
       };
   }
 }

@@ -16,7 +16,7 @@ const NAV_ITEMS = [
 function Sidebar() {
   return (
     <aside
-      className="group fixed top-0 left-0 z-40 h-screen w-[75px] hover:w-[280px] bg-[#0E1928] text-white flex flex-col overflow-hidden transition-[width] duration-200 ease-out"
+      className="group fixed top-0 left-0 z-40 h-screen w-[75px] hover:w-[280px] bg-[#0E1928] text-white flex flex-col overflow-hidden transition-[width] duration-300 ease-in-out"
     >
       {/* Logo header */}
       <div className="relative h-[86px] flex-shrink-0 overflow-hidden">
@@ -24,14 +24,14 @@ function Sidebar() {
         <img
           src="/goldman-white-letters.png"
           alt="Goldman Sachs"
-          className="absolute inset-y-0 left-0 w-[75px] h-full object-contain p-3 opacity-100 group-hover:opacity-0 transition-opacity duration-150"
+          className="absolute inset-y-0 left-0 w-[75px] h-full object-contain p-3 opacity-100 group-hover:opacity-0 transition-opacity duration-300 ease-in-out"
         />
         {/* Expanded: full Goldman wordmark */}
         <img
           src="/goldman-white-letters.png"
           alt=""
           aria-hidden
-          className="absolute inset-0 h-full w-[280px] object-contain p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-75"
+          className="absolute inset-0 h-full w-[280px] object-contain p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out"
         />
       </div>
 
@@ -58,7 +58,7 @@ function Sidebar() {
                 <span className="w-[75px] flex-shrink-0 flex items-center justify-center">
                   <Icon className="w-6 h-6" strokeWidth={1.5} />
                 </span>
-                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-75">
+                <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out">
                   {label}
                 </span>
               </>
@@ -75,7 +75,7 @@ function Sidebar() {
               JC
             </div>
           </div>
-          <div className="min-w-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150 delay-75">
+          <div className="min-w-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out">
             <div className="text-sm font-medium text-white truncate">James Chen</div>
             <div className="text-xs text-white/60 truncate">Managing Director, AWM</div>
           </div>
@@ -89,7 +89,7 @@ function Layout() {
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
-      <main className="pl-[75px] min-h-screen overflow-auto p-6">
+      <main className="min-h-screen overflow-auto p-6 pl-[115px]">
         <Outlet />
       </main>
       <PortfolioAssistant />
