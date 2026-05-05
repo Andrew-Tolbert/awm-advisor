@@ -120,6 +120,18 @@ declare module "@databricks/appkit-ui/react" {
           sentiment: string;
           /** @sqlType STRING */
           section_note: string;
+          /** @sqlType DATE */
+          earnings_date: string;
+          /** @sqlType INT */
+          year: number;
+          /** @sqlType INT */
+          quarter: number;
+          /** @sqlType STRING */
+          quarter_label: string;
+          /** @sqlType STRING */
+          prior_quarter_label: string | null;
+          /** @sqlType STRING */
+          source_description: string;
         }>;
       };
     performance_timeseries: {

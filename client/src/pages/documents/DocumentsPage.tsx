@@ -36,6 +36,12 @@ interface ToneRow {
   negative_pct: number | null;
   sentiment: string;
   section_note: string;
+  earnings_date: string;
+  year: number;
+  quarter: number;
+  quarter_label: string;
+  prior_quarter_label: string | null;
+  source_description: string;
 }
 
 interface CitationRow {
@@ -161,7 +167,7 @@ function ManagementTonePanel({ rows, loading, error }: { rows: ToneRow[]; loadin
       {delta && (
         <div className="pt-3 border-t space-y-1.5">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">vs Prior Call (Q2 2025)</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">vs Prior Call{rows[0]?.prior_quarter_label ? ` (${rows[0].prior_quarter_label})` : ''}</p>
             <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize ${SENTIMENT_BADGE[delta.sentiment] ?? ''}`}>
               {SENTIMENT_ICON[delta.sentiment]} {delta.sentiment}
             </span>
@@ -353,7 +359,7 @@ export function DocumentsPage() {
         {/* Management Tone */}
         <Card className="shadow-sm">
           <CardContent className="pt-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Management Tone — Q3 Earnings Call</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Management Tone — {toneRows.find(r => r.section === 'Overall')?.quarter_label ?? ''} Earnings Call</p>
             <ManagementTonePanel rows={toneRows} loading={toneLoading} error={toneError} />
           </CardContent>
         </Card>
