@@ -30,13 +30,18 @@ export function AdvisorChat({
   floatingTitle = 'Portfolio Assistant',
 }: AdvisorChatProps) {
   const { activeConversation } = useChatStore();
-  const { send, stop, isStreaming } = useMasChat();
+  const { send, stop, isStreaming, traceStatus } = useMasChat();
 
   const [input, setInput] = useState('');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const messages = activeConversation?.messages ?? [];
+  const allMessages = activeConversation?.messages ?? [];
+  // While streaming, hide the in-progress assistant bubble — show only the
+  // spinner until the full response is ready.
+  const lastIsStreamingAssistant =
+    isStreaming && allMessages[allMessages.length - 1]?.role === 'assistant';
+  const messages = lastIsStreamingAssistant ? allMessages.slice(0, -1) : allMessages;
   const hasMessages = messages.length > 0;
   const lastMessage = messages[messages.length - 1];
 
@@ -81,7 +86,7 @@ export function AdvisorChat({
   }
 
   const isFloating = mode === 'floating';
-  const showStreamingDots = isStreaming && !lastMessage?.content;
+  const showStreamingDots = isStreaming;
 
   const emptyState = (
     <div
@@ -124,9 +129,9 @@ export function AdvisorChat({
         <MessageBubble key={`${activeConversation?.id ?? 'none'}-${i}`} message={m} />
       ))}
       {showStreamingDots && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <div className="w-3 h-3 border-2 border-[#0E1928]/20 border-t-[#0E1928] rounded-full animate-spin" />
-          Routing through supervisor agent…
+        <div className="flex items-center gap-2 text-sm text-muted-foreground transition-opacity">
+          <div className="w-3 h-3 border-2 border-[#0E1928]/20 border-t-[#0E1928] rounded-full animate-spin flex-shrink-0" />
+          <span className="truncate">{traceStatus ?? 'Routing through supervisor agent…'}</span>
         </div>
       )}
     </>
@@ -226,11 +231,11 @@ export function AdvisorChat({
           )}
         </div>
       )}
-      <div className="flex-1 min-h-0 flex flex-col px-6 pt-4">
+      <div className="flex-1 min-h-0 flex flex-col px-6">
         {hasMessages ? (
           <div
             ref={messagesContainerRef}
-            className="flex-1 overflow-y-auto pr-2 space-y-3"
+            className="flex-1 overflow-y-auto pr-2 space-y-3 pt-3 pb-3"
           >
             {messagesList}
           </div>
