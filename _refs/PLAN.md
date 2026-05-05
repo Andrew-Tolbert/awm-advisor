@@ -9,7 +9,7 @@
 ## Progress Checklist
 
 ### Wireframe
-- [x] Sidebar navigation — GS identity, 4 nav links, active left-border style, advisor pill
+- [x] Sidebar navigation — GS identity, 4 nav links, active left-border style, advisor picker dropdown
 - [x] Page 1: Portfolio Intelligence Dashboard
   - [x] 4 KPI stat cards (AUM, Perf vs Benchmark, Allocation Drift, Clients at Risk)
   - [x] Asset Allocation donut chart (`asset_allocation.sql`)
@@ -39,11 +39,51 @@
 ### Phase 2: Data & SQL
 - [x] `portfolio_summary.sql`
 - [x] `asset_allocation.sql`
-- [x] `performance_timeseries.sql`
+- [x] `performance_timeseries.sql` — **daily** (not monthly); queries `gold_app_performance_timeseries`
 - [x] `top_holdings.sql`
 - [x] `concentration_risk.sql`
+- [x] `advisors.sql` — new; populates sidebar advisor picker
 - [x] `holdings_list.sql`
 - [x] `document_insights.sql` (parameterized by `:holding_id`)
+- [x] `management_tone.sql` (parameterized by `:holding_id`) — mock CTE, needs real data migration
+- [x] `source_citations.sql` (parameterized by `:holding_id`) — mock CTE, needs real data migration
+
+#### Gold App Tables — `ahtsa.awm`
+
+All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` tables that cover **all advisors**. The app filters to a single advisor at query time via `:advisor_id`.
+
+| Gold table | Built from | Notes |
+|---|---|---|
+| `gold_app_portfolio_summary` | `clients`, `silver_advisor_daily_returns`, `gold_ips_drift`, `accounts` | Latest alpha from silver; COALESCE 0 for advisors with no drift/risk |
+| `gold_app_asset_allocation` | `holdings → accounts → clients` | Window SUM partitioned by `advisor_id` |
+| `gold_app_performance_timeseries` | `silver_advisor_daily_returns` | All trading days (daily); no month-end aggregation |
+| `gold_app_top_holdings` | `holdings`, `bronze_historical_prices`, `gold_unified_signals`, `bronze_company_profiles` | Top-10 per advisor; risk_flag from last-30-day signals |
+| `gold_app_concentration_risk` | `gold_ips_drift`, `clients` | Top-5 clients by AUM per advisor |
+
+> **Notebook:** `/Workspace/Users/andrew.tolbert@databricks.com/gs-awm-demo/9_scratchpad/app_queries/portfolio_intelligence_queries`  
+> Run all cells to rebuild every gold table across all advisors.
+
+#### SQL Migration Tracker — `ahtsa.awm` Real Data
+
+| Query file | Page / Widget | Migrated? |
+|---|---|---|
+| `portfolio_summary.sql` | Portfolio — 4 KPI stat cards | ✅ Live — queries `gold_app_portfolio_summary WHERE advisor_id = :advisor_id` |
+| `asset_allocation.sql` | Portfolio — Asset Allocation donut chart | ✅ Live — queries `gold_app_asset_allocation WHERE advisor_id = :advisor_id` |
+| `performance_timeseries.sql` | Portfolio — Performance vs Benchmark (daily) | ✅ Live — queries `gold_app_performance_timeseries WHERE advisor_id = :advisor_id` |
+| `top_holdings.sql` | Portfolio — Top 10 Holdings table | ✅ Live — queries `gold_app_top_holdings WHERE advisor_id = :advisor_id` |
+| `concentration_risk.sql` | Portfolio — Client Concentration Risk heatmap | ✅ Live — queries `gold_app_concentration_risk WHERE advisor_id = :advisor_id` |
+| `advisors.sql` | Sidebar — advisor picker dropdown | ✅ Live — queries `ahtsa.awm.advisors ORDER BY rank_order` |
+| `holdings_list.sql` | Documents — left-panel holdings selector | ☐ Still mock CTE |
+| `document_insights.sql` | Documents — KPI delta table (`:holding_id` param) | ☐ Still mock CTE |
+| `management_tone.sql` | Documents — Management Tone bar | ☐ Mock CTE → real source: `vs_earnings_transcripts` (sentiment scores per ticker/quarter) |
+| `source_citations.sql` | Documents — Source Citations | ☐ Mock CTE → real source: `vs_sec_filings` + `vs_signals` (chunk text + page refs) |
+
+### Phase 2.5: Advisor Context & Filtering
+- [x] `ahtsa.awm.advisors` table exists with `advisor_id`, `full_name`, `title`, `email`, `rank_order`, initials derivable from `first_name`/`last_name`
+- [x] `AdvisorContext.tsx` — fetches all advisors, holds selected `advisor_id` in state, exposes `params` object and `setAdvisorId`
+- [x] Sidebar `AdvisorPicker` — `<select>` dropdown populated from `advisors` query; switching advisor re-runs all queries instantly
+- [x] `PortfolioPage` wired to `useAdvisor()` — zero hardcoded advisor IDs in component code
+- [ ] Wire `useAdvisor()` into `DocumentsPage` (holdings_list, document_insights queries when migrated)
 
 ### Phase 3: Backend & Lakebase
 - [ ] `server/routes/agents/agent-routes.ts` — `GET /api/agents/cascade`, `POST /api/agents/approve`
@@ -239,7 +279,7 @@ Returns the 4 KPI stat cards: total AUM, performance vs benchmark, allocation dr
 Returns asset class breakdown for the donut chart. Columns: `asset_class`, `aum_billions`, `pct_of_portfolio`, `benchmark_pct`, `drift_pct`.
 
 **`config/queries/performance_timeseries.sql`**  
-Returns monthly portfolio performance vs benchmark for area chart. Columns: `month`, `portfolio_return`, `benchmark_return`, `alpha`.
+Returns daily portfolio performance vs benchmark for area chart. Columns: `date`, `portfolio_return`, `benchmark_return`.
 
 **`config/queries/top_holdings.sql`**  
 Returns top 10 holdings for the table. Columns: `holding_id`, `name`, `asset_class`, `aum_millions`, `pct_of_portfolio`, `ytd_return`, `risk_flag` (none/watch/alert).
@@ -327,7 +367,7 @@ client/src/pages/
 
 `asset_allocation.sql` — 5 rows for: Private Equity (32%), High Yield (24%), Public Equities (20%), Private Credit (18%), ETFs (6%). Include `benchmark_pct` and compute `drift_pct` as the delta.
 
-`performance_timeseries.sql` — 12 months of data, `portfolio_return` and `benchmark_return` as decimals (e.g. 0.082 for 8.2%). Use realistic but flattering AWM numbers — outperform benchmark most months.
+`performance_timeseries.sql` — Daily data for Jan 1–Nov 30, 2025, `portfolio_return` and `benchmark_return` as cumulative YTD percentages. Uses date sequence with realistic AWM numbers — portfolio consistently outperforms benchmark.
 
 `top_holdings.sql` — 10 rows. Mix of PE (Blackstone, Apollo, KKR), HY bonds (Ford Motor Credit, HCA Healthcare), Private Credit (Ares, Owl Rock), Public Equities (Apple, Microsoft, NVIDIA), ETFs. Include a `risk_flag` column: set 'alert' on the Blackstone PE entry (covenant issue), 'watch' on one HY bond.
 

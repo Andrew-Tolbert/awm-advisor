@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { useAnalyticsQuery, Card, CardContent, Skeleton } from '@databricks/appkit-ui/react';
 import { sql } from '@databricks/appkit-ui/js';
@@ -23,23 +23,19 @@ interface InsightRow {
   covenant_value: number;
 }
 
-// ── Static per-holding content ────────────────────────────────────────────────
+// ── Types (query results) ─────────────────────────────────────────────────────
 
-const TONE: Record<string, { positive: number; neutral: number; negative: number }> = {
-  'blackstone-pe-sc4': { positive: 35, neutral: 30, negative: 35 },
-  default:             { positive: 62, neutral: 25, negative: 13 },
-};
+interface ToneRow {
+  positive_pct: number;
+  neutral_pct: number;
+  negative_pct: number;
+  trend_note: string;
+}
 
-const CITATIONS: Record<string, { label: string; snippet: string }[]> = {
-  'blackstone-pe-sc4': [
-    { label: '10-K 2025 — p.47',     snippet: '"...covenant headroom has compressed from 0.7x to 0.3x as of Q3 2025, approaching the minimum threshold of 1.0x..."' },
-    { label: 'Q3 Earnings — p.12',   snippet: '"...management acknowledges elevated leverage, with interest coverage declining to 2.4x against a covenant floor of 2.0x..."' },
-  ],
-  default: [
-    { label: 'Annual Report 2025 — p.23', snippet: '"...financial performance remains strong with EBITDA growth of 5.1% year-over-year, well within covenant thresholds..."' },
-    { label: 'Q3 Update — p.8',           snippet: '"...leverage ratios have improved, reflecting disciplined capital allocation and robust cash generation..."' },
-  ],
-};
+interface CitationRow {
+  label: string;
+  snippet: string;
+}
 
 const DOCUMENTS = [
   { icon: '📄', label: '10-K 2025' },
@@ -94,22 +90,23 @@ function CovenantGauge({ value }: { value: number }) {
   );
 }
 
-function ToneBar({ holdingId }: { holdingId: string }) {
-  const t = TONE[holdingId] ?? TONE.default;
+function ToneBar({ tone, loading }: { tone: ToneRow | undefined; loading: boolean }) {
+  if (loading) return <Skeleton className="h-10 w-full" />;
+  if (!tone) return null;
   return (
     <div className="space-y-1.5">
       <div className="flex h-3 w-full rounded-full overflow-hidden">
-        <div className="bg-emerald-500" style={{ width: `${t.positive}%` }} />
-        <div className="bg-slate-300" style={{ width: `${t.neutral}%` }} />
-        <div className="bg-red-400"   style={{ width: `${t.negative}%` }} />
+        <div className="bg-emerald-500" style={{ width: `${tone.positive_pct}%` }} />
+        <div className="bg-slate-300"   style={{ width: `${tone.neutral_pct}%` }} />
+        <div className="bg-red-400"     style={{ width: `${tone.negative_pct}%` }} />
       </div>
       <div className="flex gap-4 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Positive {t.positive}%</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />Neutral {t.neutral}%</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />Negative {t.negative}%</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" />Positive {tone.positive_pct}%</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-slate-300 inline-block" />Neutral {tone.neutral_pct}%</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" />Negative {tone.negative_pct}%</span>
       </div>
-      {holdingId === 'blackstone-pe-sc4' && (
-        <p className="text-xs text-muted-foreground">↓ More cautious tone vs Q2</p>
+      {tone.trend_note && (
+        <p className="text-xs text-muted-foreground">{tone.trend_note}</p>
       )}
     </div>
   );
@@ -130,11 +127,16 @@ export function DocumentsPage() {
 
   const { data: holdingsList, loading: listLoading } = useAnalyticsQuery('holdings_list');
 
-  const insightParams = { holding_id: sql.string(selectedId) };
-  const { data: insights, loading: insightsLoading } = useAnalyticsQuery('document_insights', insightParams);
+  const insightParams = useMemo(() => ({ holding_id: sql.string(selectedId) }), [selectedId]);
+  const { data: insights,   loading: insightsLoading } = useAnalyticsQuery('document_insights',  insightParams);
+  const { data: toneData,   loading: toneLoading }     = useAnalyticsQuery('management_tone',    insightParams);
+  const { data: citesData,  loading: citesLoading }    = useAnalyticsQuery('source_citations',   insightParams);
 
   const holdings = (holdingsList ?? []) as HoldingItem[];
-  const rows = (insights ?? []) as InsightRow[];
+  const rows     = (insights   ?? []) as InsightRow[];
+  const tone     = (toneData   ?? [])[0] as ToneRow | undefined;
+  const citations = (citesData ?? []) as CitationRow[];
+
   const selectedHolding = holdings.find((h) => h.holding_id === selectedId);
   const covenantRow = rows.find((r) => r.kpi_name === 'Covenant Headroom');
 
@@ -257,7 +259,7 @@ export function DocumentsPage() {
         <Card className="shadow-sm">
           <CardContent className="pt-4 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Management Tone — Q3 Earnings Call</p>
-            <ToneBar holdingId={selectedId} />
+            <ToneBar tone={tone} loading={toneLoading} />
           </CardContent>
         </Card>
 
@@ -265,16 +267,22 @@ export function DocumentsPage() {
         <Card className="shadow-sm">
           <CardContent className="pt-4 space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Source Citations</p>
-            <div className="space-y-3">
-              {(CITATIONS[selectedId] ?? CITATIONS.default).map((c) => (
-                <div key={c.label} className="space-y-1">
-                  <span className="inline-block text-xs px-2 py-0.5 rounded-full border border-[#1a3a5c]/30 text-[#1a3a5c] bg-[#1a3a5c]/5 font-medium cursor-pointer hover:bg-[#1a3a5c]/10 transition-colors">
-                    {c.label}
-                  </span>
-                  <p className="text-xs text-muted-foreground italic leading-relaxed pl-1">{c.snippet}</p>
-                </div>
-              ))}
-            </div>
+            {citesLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {citations.map((c) => (
+                  <div key={c.label} className="space-y-1">
+                    <span className="inline-block text-xs px-2 py-0.5 rounded-full border border-[#1a3a5c]/30 text-[#1a3a5c] bg-[#1a3a5c]/5 font-medium cursor-pointer hover:bg-[#1a3a5c]/10 transition-colors">
+                      {c.label}
+                    </span>
+                    <p className="text-xs text-muted-foreground italic leading-relaxed pl-1">{c.snippet}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

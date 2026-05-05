@@ -12,6 +12,7 @@ import {
   Badge,
 } from '@databricks/appkit-ui/react';
 import { TrendingUp, TrendingDown, AlertCircle, Clock } from 'lucide-react';
+import { useAdvisor } from '../../contexts/AdvisorContext';
 
 // ── Stat Card ────────────────────────────────────────────────────────────────
 
@@ -179,11 +180,26 @@ function AlertsFeed({ onCovenantClick, onDriftClick }: { onCovenantClick: () => 
 
 export function PortfolioPage() {
   const navigate = useNavigate();
+  const { advisor, params: advisorParams } = useAdvisor();
 
-  const { data: summary, loading: summaryLoading } = useAnalyticsQuery('portfolio_summary');
-  const { data: holdings, loading: holdingsLoading } = useAnalyticsQuery('top_holdings');
+  const { data: summary, loading: summaryLoading } = useAnalyticsQuery('portfolio_summary', advisorParams);
+  const { data: holdings, loading: holdingsLoading } = useAnalyticsQuery('top_holdings', advisorParams);
 
   const s = summary?.[0] as Record<string, number> | undefined;
+
+  const fmtAum = (v: number) => {
+    if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+    if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
+    return `$${v.toLocaleString()}`;
+  };
+  const fmtAumDelta = (v: number) => {
+    const sign = v >= 0 ? '+' : '-';
+    const abs = Math.abs(v);
+    if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B QTD`;
+    if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(0)}M QTD`;
+    return `${sign}$${abs.toLocaleString()} QTD`;
+  };
+  const fmtPct = (v: number) => `${v >= 0 ? '+' : ''}${v}%`;
 
   return (
     <div className="space-y-5 max-w-[1400px]">
@@ -191,7 +207,7 @@ export function PortfolioPage() {
       <div>
         <h2 className="text-2xl font-semibold tracking-tight text-foreground">Portfolio Intelligence</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          James Chen · Managing Director, AWM · As of Nov 2025
+          {advisor.name} · {advisor.title} · As of Nov 2025
         </p>
       </div>
 
@@ -199,16 +215,16 @@ export function PortfolioPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           label="Total AUM"
-          value={s ? `$${s.total_aum_billions}B` : '—'}
-          sub="+$0.3B QTD"
-          trend="up"
+          value={s ? fmtAum(s.total_aum) : '—'}
+          sub={s ? fmtAumDelta(s.qtd_aum_change) : '—'}
+          trend={s ? (s.qtd_aum_change >= 0 ? 'up' : 'down') : 'neutral'}
           loading={summaryLoading}
         />
         <StatCard
           label="Perf vs Benchmark"
-          value={s ? `+${s.perf_vs_bench_pct}%` : '—'}
+          value={s ? fmtPct(s.perf_vs_bench_pct) : '—'}
           sub="YTD alpha"
-          trend="up"
+          trend={s ? (s.perf_vs_bench_pct >= 0 ? 'up' : 'down') : 'neutral'}
           loading={summaryLoading}
         />
         <StatCard
@@ -234,16 +250,16 @@ export function PortfolioPage() {
             <CardTitle className="text-sm font-semibold">Asset Allocation</CardTitle>
           </CardHeader>
           <CardContent>
-            <DonutChart queryKey="asset_allocation" />
+            <DonutChart queryKey="asset_allocation" parameters={advisorParams} />
           </CardContent>
         </Card>
 
         <Card className="col-span-2 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Performance vs Benchmark — YTD (%)</CardTitle>
+            <CardTitle className="text-sm font-semibold">Performance vs Benchmark — Daily (%)</CardTitle>
           </CardHeader>
           <CardContent>
-            <AreaChart queryKey="performance_timeseries" />
+            <AreaChart queryKey="performance_timeseries" parameters={advisorParams} />
           </CardContent>
         </Card>
       </div>
@@ -286,6 +302,7 @@ export function PortfolioPage() {
         <CardContent>
           <HeatmapChart
             queryKey="concentration_risk"
+            parameters={advisorParams}
             yAxisKey="client_name"
             showLabels
             min={-10}

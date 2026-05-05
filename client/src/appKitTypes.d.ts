@@ -5,25 +5,45 @@ import type { SQLTypeMarker, SQLStringMarker, SQLNumberMarker, SQLBooleanMarker,
 
 declare module "@databricks/appkit-ui/react" {
   interface QueryRegistry {
-    asset_allocation: {
-        name: "asset_allocation";
+    advisors: {
+        name: "advisors";
         parameters: Record<string, never>;
         result: Array<{
           /** @sqlType STRING */
+          advisor_id: string;
+          /** @sqlType STRING */
+          name: string;
+          /** @sqlType STRING */
+          title: string;
+          /** @sqlType STRING */
+          initials: string;
+        }>;
+      };
+    asset_allocation: {
+        name: "asset_allocation";
+        parameters: {
+          /** any - use sql.*() */
+          advisor_id: SQLTypeMarker;
+        };
+        result: Array<{
+          /** @sqlType STRING */
           asset_class: string;
-          /** @sqlType DECIMAL(3,1) */
+          /** @sqlType DOUBLE */
           pct_of_portfolio: number;
         }>;
       };
     concentration_risk: {
         name: "concentration_risk";
-        parameters: Record<string, never>;
+        parameters: {
+          /** any - use sql.*() */
+          advisor_id: SQLTypeMarker;
+        };
         result: Array<{
           /** @sqlType STRING */
           asset_class: string;
           /** @sqlType STRING */
           client_name: string;
-          /** @sqlType DECIMAL(2,1) */
+          /** @sqlType DOUBLE */
           delta_pct: number;
         }>;
       };
@@ -96,33 +116,33 @@ declare module "@databricks/appkit-ui/react" {
       };
     performance_timeseries: {
         name: "performance_timeseries";
-        parameters: Record<string, never>;
+        parameters: {
+          /** any - use sql.*() */
+          advisor_id: SQLTypeMarker;
+        };
         result: Array<{
-          /** @sqlType STRING */
-          month: string;
-          /** @sqlType DECIMAL(3,1) */
+          /** @sqlType DATE */
+          date: string;
+          /** @sqlType DOUBLE */
           portfolio_return: number;
-          /** @sqlType DECIMAL(2,1) */
+          /** @sqlType DOUBLE */
           benchmark_return: number;
         }>;
       };
     portfolio_summary: {
         name: "portfolio_summary";
-        parameters: Record<string, never>;
-        result: Array<{
-          /** @sqlType DECIMAL(2,1) */
-          total_aum_billions: number;
-          /** @sqlType DECIMAL(2,1) */
-          perf_vs_bench_pct: number;
-          /** @sqlType INT */
-          drift_count: number;
-          /** @sqlType INT */
-          clients_at_risk: number;
-        }>;
+        parameters: {
+          /** any - use sql.*() */
+          advisor_id: SQLTypeMarker;
+        };
+        result: unknown;
       };
     top_holdings: {
         name: "top_holdings";
-        parameters: Record<string, never>;
+        parameters: {
+          /** any - use sql.*() */
+          advisor_id: SQLTypeMarker;
+        };
         result: Array<{
           /** @sqlType STRING */
           holding_id: string;
@@ -130,11 +150,11 @@ declare module "@databricks/appkit-ui/react" {
           name: string;
           /** @sqlType STRING */
           asset_class: string;
-          /** @sqlType DECIMAL(4,1) */
+          /** @sqlType DOUBLE */
           aum_millions: number;
-          /** @sqlType DECIMAL(2,1) */
+          /** @sqlType DOUBLE */
           pct_of_portfolio: number;
-          /** @sqlType DECIMAL(3,1) */
+          /** @sqlType DOUBLE */
           ytd_return: number;
           /** @sqlType STRING */
           risk_flag: string;

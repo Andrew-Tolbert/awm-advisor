@@ -4,6 +4,7 @@ import { PortfolioPage } from './pages/portfolio/PortfolioPage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { AgentsPage } from './pages/agents/AgentsPage';
 import { GeniePage } from './pages/genie/GeniePage';
+import { AdvisorProvider, useAdvisor } from './contexts/AdvisorContext';
 
 const NAV_ITEMS = [
   { to: '/',          end: true,  icon: LayoutDashboard, label: 'Portfolio Intelligence' },
@@ -49,19 +50,31 @@ function Sidebar() {
         ))}
       </nav>
 
-      {/* Advisor identity pill */}
-      <div className="px-4 py-4 border-t">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[#1a3a5c] flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
-            JC
-          </div>
-          <div className="min-w-0">
-            <div className="text-sm font-medium text-foreground truncate">James Chen</div>
-            <div className="text-xs text-muted-foreground truncate">Managing Director, AWM</div>
-          </div>
-        </div>
-      </div>
+      {/* Advisor picker */}
+      <AdvisorPicker />
     </aside>
+  );
+}
+
+function AdvisorPicker() {
+  const { advisors, advisor, setAdvisorId, loading } = useAdvisor();
+  return (
+    <div className="px-4 py-4 border-t space-y-2">
+      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Viewing as</p>
+      <select
+        value={advisor.advisorId}
+        onChange={(e) => setAdvisorId(e.target.value)}
+        disabled={loading}
+        className="w-full text-sm rounded-md border border-input bg-background px-2 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+      >
+        {advisors.map((a) => (
+          <option key={a.advisorId} value={a.advisorId}>
+            {a.advisorId}
+          </option>
+        ))}
+      </select>
+      <p className="text-xs text-muted-foreground truncate">{advisor.title}</p>
+    </div>
   );
 }
 
@@ -89,5 +102,9 @@ const router = createBrowserRouter([
 ]);
 
 export default function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <AdvisorProvider>
+      <RouterProvider router={router} />
+    </AdvisorProvider>
+  );
 }

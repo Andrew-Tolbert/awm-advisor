@@ -1,5 +1,8 @@
 SELECT
-  2.4   AS total_aum_billions,
-  1.8   AS perf_vs_bench_pct,
-  3     AS drift_count,
-  2     AS clients_at_risk
+  total_aum,
+  perf_vs_bench_pct,
+  drift_count,
+  clients_at_risk,
+  qtd_aum_change
+FROM ahtsa.awm.gold_app_portfolio_summary
+WHERE advisor_id = :advisor_id

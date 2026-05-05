@@ -150,9 +150,10 @@ gs-awm-mas  (Supervisor)
 
 ### Silver
 
-| Table | What It Holds |
-|---|---|
-| `silver_company_fundamentals` | Cleaned/joined fundamentals (110 cols) — income, balance, ratios, estimates, analyst ratings, price targets |
+| Table | What It Holds | Key Columns |
+|---|---|---|
+| `silver_advisor_daily_returns` | Pre-computed daily cumulative returns per advisor (250 trading days, anchored 0% on 2025-05-05) | `date`, `advisor_id`, `portfolio_return_before_fees`, `portfolio_return_after_fees`, `portfolio_alpha`, `cumulative_fees`, `benchmark_return`, `benchmark` (always `GSPC`) |
+| `silver_company_fundamentals` | Cleaned/joined fundamentals (110 cols) — income, balance, ratios, estimates, analyst ratings, price targets | — |
 
 ### Bronze — Market Data
 
