@@ -95,6 +95,23 @@ declare module "@databricks/appkit-ui/react" {
           has_alert: boolean;
         }>;
       };
+    management_tone: {
+        name: "management_tone";
+        parameters: {
+          /** STRING - use sql.string() */
+          holding_id: SQLStringMarker;
+        };
+        result: Array<{
+          /** @sqlType INT */
+          positive_pct: number;
+          /** @sqlType INT */
+          neutral_pct: number;
+          /** @sqlType INT */
+          negative_pct: number;
+          /** @sqlType STRING */
+          trend_note: string;
+        }>;
+      };
     mocked_sales: {
         name: "mocked_sales";
         parameters: {
@@ -135,7 +152,31 @@ declare module "@databricks/appkit-ui/react" {
           /** any - use sql.*() */
           advisor_id: SQLTypeMarker;
         };
-        result: unknown;
+        result: Array<{
+          /** @sqlType DOUBLE */
+          total_aum: number;
+          /** @sqlType DOUBLE */
+          perf_vs_bench_pct: number;
+          /** @sqlType BIGINT */
+          drift_count: number;
+          /** @sqlType BIGINT */
+          clients_at_risk: number;
+          /** @sqlType DOUBLE */
+          qtd_aum_change: number;
+        }>;
+      };
+    source_citations: {
+        name: "source_citations";
+        parameters: {
+          /** STRING - use sql.string() */
+          holding_id: SQLStringMarker;
+        };
+        result: Array<{
+          /** @sqlType STRING */
+          label: string;
+          /** @sqlType STRING */
+          snippet: string;
+        }>;
       };
     top_holdings: {
         name: "top_holdings";
