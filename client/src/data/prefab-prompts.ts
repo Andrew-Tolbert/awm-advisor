@@ -20,6 +20,57 @@ export interface PrefabPrompt {
 }
 
 export const PREFAB_PROMPTS: Record<string, PrefabPrompt[]> = {
+  advisor: [
+    {
+      prompt: 'Top portfolio risks across all asset classes right now',
+      cached: `**Equity concentration in CEO succession and AI monetization uncertainty is the dominant risk right now.**
+
+3,944 high-severity surprise disclosure signals and 1,801 earnings miss alerts require immediate review. Apple's CEO transition (Tim Cook → John Ternus) has generated 248 distinct succession-related signals flagged for action, compounding execution risk on AI strategy at a time when the company already lags peers in generative AI monetization.
+
+**Portfolio Exposure Breakdown**
+
+**Equity – Highest Alert Volume**
+- **Surprise Disclosure**: 3,944 action-required signals (0.9 severity) — Q&A sessions surfacing unexpected risks
+- **M&A**: 2,630 signals — integration and regulatory risk across the book
+- **Earnings Miss**: 1,801 signals — forward guidance pressure concentrated in growth names
+- **Management Change**: 1,094 signals — succession risk beyond Apple (multi-company wave)
+- **Guidance Pressure**: 975 signals — margin compression and demand uncertainty
+
+**Private Credit – Credit Stress Accelerating**
+- **Credit Event**: 448 signals (0.9 severity) — non-accruals, defaults, or restructurings in BDC portfolios
+- **Credit Stress Probe**: 409 signals — analyst questions on portfolio quality, PIK income, and covenant breaches
+- **Private Credit Health**: 100 medium-severity (0.85) signals on NAV trajectory, PIK-to-NII ratio, dividend coverage, and unrealized depreciation
+
+**Thematic Risks**
+- **Magnificent 7 Earnings Concentration**: 237 signals on simultaneous hyperscaler earnings creating single-week portfolio volatility (late April)
+- **AI CapEx ROI Uncertainty**: Multiple signals questioning whether $100B+ in AI infrastructure spend will translate to revenue growth
+- **Geopolitical Oil Shock**: 123 signals linking Middle East supply disruption to mega-cap earnings catalyst week
+- **Berkshire Position Exits**: 124 signals on systematic reduction in BAC and other financials under new CEO Greg Abel
+
+**Heads Up**
+Private credit health metrics (PIK-to-NII, unrealized depreciation) are showing 100 medium-severity warnings — if any of your overweight BDC positions appear in the credit event or stress probe lists, prioritize those for immediate review.`,
+    },
+    {
+      prompt: 'Which BDC names have the most stressed covenants?',
+      cached: `**TCPC, FSK, and GBDC show the most covenant stress.**
+
+**Quantitative Stress Indicators (as of Q4 2025)**
+
+- **TCPC** — 3 red flags: 73.7% depreciation / NAV, 4.14× realized loss acceleration, 190% cumulative loss / NAV. Highest aggregate stress score (0.85 severity, 3 concerns).
+- **FSK** — 2 red flags: 33.1% PIK / NII (one-third of income not received in cash), 83.6% dividend coverage (undercovered payout). Also flagged 79.8% cumulative loss / NAV on watch.
+- **GBDC** — 1 red flag: 90.3% dividend coverage (barely covered). Non-accruals rose to 1.6% in Q1 2025 with Maverick added, driving NAV down 1% sequentially to $16.63/share.
+- **GSBD, NMFC, OCSL** — Each carry 1 red concern but lower overall severity.
+
+**Qualitative Evidence**
+
+- **GBDC** — Wells Fargo analyst flagged looser covenants and higher leverage across private credit in Q1 2025; management acknowledged a growing tail of stressed borrowers among less experienced lenders. Maverick non-accrual triggered ~$8M realized/unrealized loss.
+- **AINV** — Q1 2025 call noted amendments involving covenant violations, PIK, and forbearance were "flat quarter-over-quarter," signaling persistent but stable stress.
+- **Lower middle market lenders (CSWC)** report covenant structures remain intact despite spread compression — 100% of deals retain strong covenants.
+
+**Heads Up**
+TCPC's cumulative loss ratio (190% of NAV) and FSK's PIK reliance (33% of NII) are structurally concerning and warrant deeper portfolio review if clients hold meaningful positions.`,
+    },
+  ],
   portfolio: [
     {
       prompt: 'What are the top risks across the portfolio right now?',

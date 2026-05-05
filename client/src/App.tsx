@@ -1,16 +1,18 @@
 import { createBrowserRouter, RouterProvider, NavLink, Outlet } from 'react-router';
-import { LayoutDashboard, FileText, Bot, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, FileText, Bot, MessageSquare, Cpu } from 'lucide-react';
 import { PortfolioPage } from './pages/portfolio/PortfolioPage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { AgentsPage } from './pages/agents/AgentsPage';
 import { GeniePage } from './pages/genie/GeniePage';
+import { TechStackPage } from './pages/tech-stack/TechStackPage';
 import { PortfolioAssistant } from './components/PortfolioAssistant';
 
 const NAV_ITEMS = [
-  { to: '/',          end: true,  icon: LayoutDashboard, label: 'Portfolio Intelligence' },
-  { to: '/documents', end: false, icon: FileText,        label: 'Document Intelligence'  },
-  { to: '/agents',    end: false, icon: Bot,             label: 'Agent Orchestration'    },
-  { to: '/genie',     end: false, icon: MessageSquare,   label: 'Genie Chat'             },
+  { to: '/',           end: true,  icon: LayoutDashboard, label: 'Portfolio Intelligence' },
+  { to: '/documents',  end: false, icon: FileText,        label: 'Document Intelligence'  },
+  { to: '/agents',     end: false, icon: Bot,             label: 'Agent Orchestration'    },
+  { to: '/genie',      end: false, icon: MessageSquare,   label: 'Advisor Chat'           },
+  { to: '/tech-stack', end: false, icon: Cpu,             label: 'Tech Stack'             },
 ];
 
 function Sidebar() {
@@ -103,10 +105,11 @@ const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: '/',          element: <PortfolioPage /> },
-      { path: '/documents', element: <DocumentsPage /> },
-      { path: '/agents',    element: <AgentsPage /> },
-      { path: '/genie',     element: <GeniePage /> },
+      { path: '/',           element: <PortfolioPage /> },
+      { path: '/documents',  element: <DocumentsPage /> },
+      { path: '/agents',     element: <AgentsPage /> },
+      { path: '/genie',      element: <GeniePage /> },
+      { path: '/tech-stack', element: <TechStackPage /> },
     ],
   },
 ]);
