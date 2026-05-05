@@ -129,9 +129,30 @@ declare module "@databricks/appkit-ui/react" {
           /** @sqlType STRING */
           quarter_label: string;
           /** @sqlType STRING */
-          prior_quarter_label: string | null;
+          prior_quarter_label: string;
           /** @sqlType STRING */
           source_description: string;
+        }>;
+      };
+    morning_briefings: {
+        name: "morning_briefings";
+        parameters: {
+          /** any - use sql.*() */
+          advisor_id: SQLTypeMarker;
+        };
+        result: Array<{
+          /** @sqlType INT */
+          section_id: number;
+          /** @sqlType STRING */
+          section_key: string;
+          /** @sqlType STRING */
+          section_name: string;
+          /** @sqlType STRING */
+          content: string;
+          /** @sqlType STRING */
+          status: string;
+          /** @sqlType STRING */
+          generated_at: string;
         }>;
       };
     performance_timeseries: {
