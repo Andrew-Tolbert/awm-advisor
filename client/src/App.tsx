@@ -8,6 +8,7 @@ import { GeniePage } from './pages/genie/GeniePage';
 import { AdvisorProvider, useAdvisor } from './contexts/AdvisorContext';
 import { TechStackPage } from './pages/tech-stack/TechStackPage';
 import { PortfolioAssistant } from './components/PortfolioAssistant';
+import { MorningBriefingBell } from './components/MorningBriefingBell';
 
 const NAV_ITEMS = [
   { to: '/',           end: true,  icon: LayoutDashboard, label: 'Portfolio Intelligence' },
@@ -121,6 +122,7 @@ function Layout() {
         </div>
       </main>
       <PortfolioAssistant />
+      <MorningBriefingBell />
     </div>
   );
 }
