@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router';
 import {
   useAnalyticsQuery,
@@ -77,6 +78,26 @@ interface HoldingsTableProps {
 }
 
 function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
+  const [nameFilter, setNameFilter] = useState('');
+  const [assetClassFilter, setAssetClassFilter] = useState('');
+  const [riskFilter, setRiskFilter] = useState('');
+
+  const assetClasses = useMemo(
+    () => [...new Set((data ?? []).map((h) => h.asset_class))].sort(),
+    [data],
+  );
+
+  const filtered = useMemo(() => {
+    const rows = data ?? [];
+    const name = nameFilter.toLowerCase();
+    return rows.filter(
+      (h) =>
+        (!name || h.name.toLowerCase().includes(name)) &&
+        (!assetClassFilter || h.asset_class === assetClassFilter) &&
+        (!riskFilter || h.risk_flag === riskFilter),
+    );
+  }, [data, nameFilter, assetClassFilter, riskFilter]);
+
   if (loading) {
     return (
       <div className="space-y-2">
@@ -92,39 +113,79 @@ function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
-            <th className="text-left py-2 pr-4 font-medium">Name</th>
-            <th className="text-left py-2 pr-4 font-medium">Asset Class</th>
-            <th className="text-right py-2 pr-4 font-medium">AUM ($M)</th>
-            <th className="text-right py-2 pr-4 font-medium">% Portfolio</th>
-            <th className="text-right py-2 pr-4 font-medium">YTD Return</th>
-            <th className="text-center py-2 font-medium">Risk</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.map((h) => (
-            <tr
-              key={h.holding_id}
-              onClick={() => onRowClick(h.holding_id)}
-              className="border-b last:border-0 cursor-pointer hover:bg-muted/50 transition-colors"
-            >
-              <td className="py-2.5 pr-4 font-medium text-foreground">{h.name}</td>
-              <td className="py-2.5 pr-4 text-muted-foreground">{h.asset_class}</td>
-              <td className="py-2.5 pr-4 text-right tabular-nums">{Number(h.aum_millions).toFixed(1)}</td>
-              <td className="py-2.5 pr-4 text-right tabular-nums">{Number(h.pct_of_portfolio).toFixed(1)}%</td>
-              <td className={`py-2.5 pr-4 text-right tabular-nums ${Number(h.ytd_return) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                {Number(h.ytd_return) >= 0 ? '+' : ''}{Number(h.ytd_return).toFixed(1)}%
-              </td>
-              <td className="py-2.5 text-center">
-                <RiskBadge flag={h.risk_flag} />
-              </td>
+    <div className="space-y-2">
+      {/* Filter bar */}
+      <div className="flex gap-2 flex-wrap items-center">
+        <input
+          type="text"
+          placeholder="Search name…"
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+          className="h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring w-40"
+        />
+        <select
+          value={assetClassFilter}
+          onChange={(e) => setAssetClassFilter(e.target.value)}
+          className="h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          <option value="">All classes</option>
+          {assetClasses.map((ac) => <option key={ac} value={ac}>{ac}</option>)}
+        </select>
+        <select
+          value={riskFilter}
+          onChange={(e) => setRiskFilter(e.target.value)}
+          className="h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+        >
+          <option value="">All risk</option>
+          <option value="alert">Alert</option>
+          <option value="watch">Watch</option>
+          <option value="none">None</option>
+        </select>
+        <span className="text-xs text-muted-foreground ml-auto">
+          {filtered.length}{filtered.length !== data.length ? ` of ${data.length}` : ''} holdings
+        </span>
+      </div>
+
+      {/* Scrollable table — first ~10 rows visible, scroll for more */}
+      <div className="overflow-y-auto overflow-x-auto" style={{ maxHeight: '420px' }}>
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-background z-10">
+            <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+              <th className="text-left py-2 pr-4 font-medium">Name</th>
+              <th className="text-left py-2 pr-4 font-medium">Asset Class</th>
+              <th className="text-right py-2 pr-4 font-medium">AUM ($M)</th>
+              <th className="text-right py-2 pr-4 font-medium">% Portfolio</th>
+              <th className="text-right py-2 pr-4 font-medium">YTD Return</th>
+              <th className="text-center py-2 font-medium">Risk</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {filtered.map((h) => (
+              <tr
+                key={h.holding_id}
+                onClick={() => onRowClick(h.holding_id)}
+                className="border-b last:border-0 cursor-pointer hover:bg-muted/50 transition-colors"
+              >
+                <td className="py-2.5 pr-4 font-medium text-foreground">{h.name}</td>
+                <td className="py-2.5 pr-4 text-muted-foreground">{h.asset_class}</td>
+                <td className="py-2.5 pr-4 text-right tabular-nums">{Number(h.aum_millions).toFixed(1)}</td>
+                <td className="py-2.5 pr-4 text-right tabular-nums">{Number(h.pct_of_portfolio).toFixed(1)}%</td>
+                <td className={`py-2.5 pr-4 text-right tabular-nums ${Number(h.ytd_return) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {Number(h.ytd_return) >= 0 ? '+' : ''}{Number(h.ytd_return).toFixed(1)}%
+                </td>
+                <td className="py-2.5 text-center">
+                  <RiskBadge flag={h.risk_flag} />
+                </td>
+              </tr>
+            ))}
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">No holdings match filters</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

@@ -81,7 +81,10 @@ declare module "@databricks/appkit-ui/react" {
       };
     holdings_list: {
         name: "holdings_list";
-        parameters: Record<string, never>;
+        parameters: {
+          /** STRING - use sql.string() */
+          advisor_id: SQLStringMarker;
+        };
         result: Array<{
           /** @sqlType STRING */
           holding_id: string;
@@ -91,17 +94,22 @@ declare module "@databricks/appkit-ui/react" {
           asset_class: string;
           /** @sqlType STRING */
           strategy: string;
-          /** @sqlType BOOLEAN */
-          has_alert: boolean;
+          /** @sqlType DOUBLE */
+          aum_millions: number;
+          /** @sqlType STRING */
+          risk_flag: string;
         }>;
       };
     management_tone: {
         name: "management_tone";
-        parameters: {
-          /** STRING - use sql.string() */
-          holding_id: SQLStringMarker;
-        };
+        parameters: Record<string, never>;
         result: Array<{
+          /** @sqlType STRING */
+          holding_id: string;
+          /** @sqlType STRING */
+          section: string;
+          /** @sqlType INT */
+          section_order: number;
           /** @sqlType INT */
           positive_pct: number;
           /** @sqlType INT */
@@ -109,26 +117,9 @@ declare module "@databricks/appkit-ui/react" {
           /** @sqlType INT */
           negative_pct: number;
           /** @sqlType STRING */
-          trend_note: string;
-        }>;
-      };
-    mocked_sales: {
-        name: "mocked_sales";
-        parameters: {
-          /** any - use sql.*() */
-          max_month_num: SQLTypeMarker;
-        };
-        result: Array<{
+          sentiment: string;
           /** @sqlType STRING */
-          month: string;
-          /** @sqlType INT */
-          month_num: number;
-          /** @sqlType INT */
-          revenue: number;
-          /** @sqlType INT */
-          expenses: number;
-          /** @sqlType INT */
-          customers: number;
+          section_note: string;
         }>;
       };
     performance_timeseries: {
