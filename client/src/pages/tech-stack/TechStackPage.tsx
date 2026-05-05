@@ -74,15 +74,22 @@ export function TechStackPage() {
   return (
     <div className="space-y-6 max-w-[1400px]">
       {/* Header */}
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Behind the demo
-        </p>
-        <h1 className="text-2xl font-semibold text-foreground mt-1">Tech Stack</h1>
-        <p className="text-sm text-muted-foreground mt-1.5 max-w-2xl">
-          The Databricks components, services, and infrastructure powering the AWM Advisor experience.
-          Click any tile to jump straight to its workspace asset.
-        </p>
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Behind the demo
+          </p>
+          <h1 className="text-2xl font-semibold text-foreground mt-1">Tech Stack</h1>
+          <p className="text-sm text-muted-foreground mt-1.5 max-w-2xl">
+            The Databricks components, services, and infrastructure powering the AWM Advisor experience.
+            Click any tile to jump straight to its workspace asset.
+          </p>
+        </div>
+        <img
+          src="/databricks-logo.png"
+          alt="Databricks"
+          className="hidden md:block h-10 w-10 mt-1 flex-shrink-0 select-none"
+        />
       </div>
 
       {/* Grid of stack items */}
