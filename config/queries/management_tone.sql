@@ -14,4 +14,5 @@ SELECT
   prior_quarter_label,
   source_description
 FROM ahtsa.awm.gold_app_management_tone
+WHERE section IS NOT NULL
 ORDER BY holding_id, section_order

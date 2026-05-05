@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider, NavLink, Outlet } from 'react-router';
-import { LayoutDashboard, FileText, Bot, MessageSquare, Cpu } from 'lucide-react';
+import { LayoutDashboard, TrendingDown, FileText, Bot, MessageSquare, Cpu } from 'lucide-react';
 import { PortfolioPage } from './pages/portfolio/PortfolioPage';
+import { DriftPage } from './pages/drift/DriftPage';
 import { DocumentsPage } from './pages/documents/DocumentsPage';
 import { AgentsPage } from './pages/agents/AgentsPage';
 import { GeniePage } from './pages/genie/GeniePage';
@@ -10,6 +11,7 @@ import { PortfolioAssistant } from './components/PortfolioAssistant';
 
 const NAV_ITEMS = [
   { to: '/',           end: true,  icon: LayoutDashboard, label: 'Portfolio Intelligence' },
+  { to: '/drift',      end: false, icon: TrendingDown,    label: 'Drift Analysis'         },
   { to: '/documents',  end: false, icon: FileText,        label: 'Document Intelligence'  },
   { to: '/agents',     end: false, icon: Bot,             label: 'Agent Orchestration'    },
   { to: '/genie',      end: false, icon: MessageSquare,   label: 'Advisor Chat'           },
@@ -128,6 +130,7 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       { path: '/',           element: <PortfolioPage /> },
+      { path: '/drift',      element: <DriftPage /> },
       { path: '/documents',  element: <DocumentsPage /> },
       { path: '/agents',     element: <AgentsPage /> },
       { path: '/genie',      element: <GeniePage /> },
