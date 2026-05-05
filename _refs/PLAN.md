@@ -10,14 +10,23 @@
 
 ### Wireframe
 - [x] Sidebar navigation — GS identity, 4 nav links, active left-border style, advisor picker dropdown
+- [ ] **Sidebar updated to 5 nav links** — add Drift Analysis as second item
 - [x] Page 1: Portfolio Intelligence Dashboard
   - [x] 4 KPI stat cards (AUM, Perf vs Benchmark, Allocation Drift, Clients at Risk)
+  - [ ] Allocation Drift KPI card links to `/drift` instead of being static
+  - [ ] Drift alert in Active Alerts feed links to `/drift` (was `/documents`)
   - [x] Asset Allocation donut chart (`asset_allocation.sql`)
   - [x] Performance vs Benchmark area chart (`performance_timeseries.sql`)
   - [x] Top 10 Holdings table with risk badges, clickable rows → `/documents`
-  - [x] Active Alerts feed — covenant alert → `/agents`, drift alert → `/documents`
+  - [x] Active Alerts feed — covenant alert → `/agents`, drift alert → `/drift`
   - [x] Client Concentration Risk heatmap (`concentration_risk.sql`)
-- [x] Page 2: Document Intelligence
+- [ ] Page 2: Drift Analysis (`/drift`) — **NEW**
+  - [ ] Advisor-level summary bar: total accounts drifting, total clients at risk, worst asset class
+  - [ ] Client drift table — one row per client, sorted by `client_drift_score` desc; columns: client name, AUM, # breaches, worst asset class, drift score badge
+  - [ ] Account drill-down panel — clicking a client expands or navigates to show per-account, per-asset-class drift rows with IPS band (min/target/max) and actual vs target delta
+  - [ ] Asset class drift heatmap — rows = asset classes, columns = Over / Within / Under Band counts across all accounts for this advisor
+  - [ ] URL param sync (`?client=<id>`) to deep-link from Portfolio page alerts
+- [x] Page 3: Document Intelligence
   - [x] Left panel: holdings list with asset-class badges and alert dot
   - [x] Left panel: document list (10-K, Earnings, CIM, Covenant)
   - [x] KPI delta table with flag indicators
@@ -25,7 +34,7 @@
   - [x] Management tone stacked bar
   - [x] Source citations with quoted snippets
   - [x] URL param sync (`?holding=<id>`) from Portfolio page
-- [x] Page 3: Agent Orchestration
+- [x] Page 4: Agent Orchestration
   - [x] Proactive alert banner with pulsing red dot
   - [x] Agent cascade timeline with staggered animation (3 agents)
   - [x] Expandable agent detail panels
@@ -34,7 +43,7 @@
   - [x] Approve & Send → success state with checkmark
   - [x] Re-allocation scenario card
   - [x] Audit trail footer
-- [x] Page 4: Genie Chat — full-width embed (removed max-w constraint)
+- [x] Page 5: Genie Chat — full-width embed (removed max-w constraint)
 
 ### Phase 2: Data & SQL
 - [x] `portfolio_summary.sql`
@@ -47,6 +56,9 @@
 - [x] `document_insights.sql` (parameterized by `:holding_id`)
 - [x] `management_tone.sql` (parameterized by `:holding_id`) — mock CTE, needs real data migration
 - [x] `source_citations.sql` (parameterized by `:holding_id`) — mock CTE, needs real data migration
+- [ ] `drift_summary.sql` — advisor-level summary: total drifting accounts, clients at risk, worst asset class
+- [ ] `client_drift.sql` — one row per client for this advisor; `client_drift_score`, `client_breach_count`, worst asset class; parameterized by `:advisor_id`
+- [ ] `account_drift.sql` — per-account, per-asset-class detail with full dollar columns; parameterized by `:advisor_id` + optional `:client_id`
 
 #### Gold App Tables — `ahtsa.awm`
 
@@ -58,10 +70,56 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 | `gold_app_asset_allocation` | `holdings → accounts → clients` | Window SUM partitioned by `advisor_id` |
 | `gold_app_performance_timeseries` | `silver_advisor_daily_returns` | All trading days (daily); no month-end aggregation |
 | `gold_app_top_holdings` | `holdings`, `bronze_historical_prices`, `gold_unified_signals`, `bronze_company_profiles` | Top-10 per advisor; risk_flag from last-30-day signals |
-| `gold_app_concentration_risk` | `gold_ips_drift`, `clients` | Top-5 clients by AUM per advisor |
+| `gold_app_concentration_risk` | `gold_ips_drift`, `clients` | Top-5 clients by AUM per advisor — kept for Portfolio heatmap; Drift page uses account_drift |
+
+**New tables needed for Drift Analysis page:**
+
+| Gold table | Built from | Notes |
+|---|---|---|
+| `gold_app_drift_summary` | `gold_app_account_drift`, `clients` | One row per advisor: drifting_accounts, clients_at_risk, worst_asset_class, total_rebalance_to_band |
+| `gold_app_client_drift` | `gold_app_account_drift`, `clients` | One row per (advisor, client): breach_count, worst_asset_class, total_aum, total_rebalance_to_target |
+| `gold_app_account_drift` | view definition of `gold_ips_drift` + `ips_targets` + `accounts` + `clients` | **See full column spec below** — materialized as a table |
+
+#### `gold_app_account_drift` — Full Column Specification
+
+**Approach:** `gold_ips_drift` is a live view (`SELECT * FROM gold_ips_drift` per dashboard). Take the view's underlying SQL, extend it with the missing dollar columns, and materialize as `gold_app_account_drift`. This becomes the single source of truth for all drift data — the summary and client tables aggregate from it.
+
+**Key design decisions:**
+- `COALESCE(target_pct, 0)` — accounts whose `risk_profile` has no IPS target for a given asset class (e.g., an Income profile with no Private Equity target) get `target_pct = 0`, `target_dollars = 0`, and `min_dollars = 0`. They still appear if they hold any of that asset class, which itself may be a drift violation.
+- `rebalance_to_band` is already in `gold_ips_drift` — carry it through unchanged.
+- `rebalance_to_target` is new — the dollar move to hit exact `target_pct` (not just inside the band). Formula: `(target_pct - actual_pct) * account_aum / 100`. Positive = need to buy; negative = need to sell.
+- All assets held by an account are included, even if they have no IPS target row (LEFT JOIN on `ips_targets`).
+
+**Full column list:**
+
+| Column | Type | Source / Formula |
+|---|---|---|
+| `advisor_id` | STRING | `accounts → clients → advisors` |
+| `client_id` | STRING | `accounts.client_id` |
+| `client_name` | STRING | `clients.client_name` |
+| `account_id` | STRING | `accounts.account_id` |
+| `account_name` | STRING | `accounts.account_name` |
+| `account_aum` | DOUBLE | `accounts.account_aum` |
+| `asset_class` | STRING | `holdings.asset_class` |
+| `actual_dollars` | DOUBLE | `SUM(holdings.market_value)` for this account + asset class |
+| `actual_pct` | DOUBLE | `actual_dollars / account_aum * 100` |
+| `target_pct` | DOUBLE | `COALESCE(ips_targets.target_allocation_pct, 0)` |
+| `min_pct` | DOUBLE | `COALESCE(ips_targets.min_allocation_pct, 0)` |
+| `max_pct` | DOUBLE | `COALESCE(ips_targets.max_allocation_pct, 0)` |
+| `target_dollars` | DOUBLE | `target_pct * account_aum / 100` |
+| `min_dollars` | DOUBLE | `min_pct * account_aum / 100` |
+| `max_dollars` | DOUBLE | `max_pct * account_aum / 100` |
+| `delta_pct` | DOUBLE | `actual_pct - target_pct` |
+| `delta_dollars` | DOUBLE | `actual_dollars - target_dollars` |
+| `drift_status` | STRING | `CASE WHEN actual_pct > max_pct THEN 'Over Band' WHEN actual_pct < min_pct THEN 'Under Band' ELSE 'Within Band' END` |
+| `band_distance_pct` | DOUBLE | From `gold_ips_drift` — distance to nearest band edge (0 if within) |
+| `rebalance_to_band` | DOUBLE | From `gold_ips_drift` — $ to get back inside band (0 if within) |
+| `rebalance_to_target` | DOUBLE | `(target_pct - actual_pct) * account_aum / 100` — $ to reach exact target; positive = buy, negative = sell |
+| `risk_profile` | STRING | `clients.risk_profile` (Growth/Balanced/Income) |
+| `drift_severity` | STRING | From `gold_ips_drift` (high/medium/low/none) |
 
 > **Notebook:** `/Workspace/Users/andrew.tolbert@databricks.com/gs-awm-demo/9_scratchpad/app_queries/portfolio_intelligence_queries`  
-> Run all cells to rebuild every gold table across all advisors.
+> Run all cells to rebuild every gold table across all advisors. **Add `gold_app_account_drift` first (others aggregate from it), then `gold_app_client_drift`, then `gold_app_drift_summary`.**
 
 #### SQL Migration Tracker — `ahtsa.awm` Real Data
 
@@ -73,17 +131,21 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 | `top_holdings.sql` | Portfolio — Top 10 Holdings table | ✅ Live — queries `gold_app_top_holdings WHERE advisor_id = :advisor_id` |
 | `concentration_risk.sql` | Portfolio — Client Concentration Risk heatmap | ✅ Live — queries `gold_app_concentration_risk WHERE advisor_id = :advisor_id` |
 | `advisors.sql` | Sidebar — advisor picker dropdown | ✅ Live — queries `ahtsa.awm.advisors ORDER BY rank_order` |
-| `holdings_list.sql` | Documents — left-panel holdings selector | ☐ Still mock CTE |
+| `holdings_list.sql` | Documents — left-panel holdings selector | ✅ Live — queries `gold_app_holdings_list WHERE advisor_id = :advisor_id` |
 | `document_insights.sql` | Documents — KPI delta table (`:holding_id` param) | ☐ Still mock CTE |
-| `management_tone.sql` | Documents — Management Tone bar | ☐ Mock CTE → real source: `vs_earnings_transcripts` (sentiment scores per ticker/quarter) |
+| `management_tone.sql` | Documents — Management Tone bar | ✅ Live — queries `gold_app_management_tone WHERE holding_id = :holding_id` |
 | `source_citations.sql` | Documents — Source Citations | ☐ Mock CTE → real source: `vs_sec_filings` + `vs_signals` (chunk text + page refs) |
+| `drift_summary.sql` | Drift — advisor KPI bar | ☐ Needs `gold_app_drift_summary` (aggregates from `gold_app_account_drift`) |
+| `client_drift.sql` | Drift — client table | ☐ Needs `gold_app_client_drift` (aggregates from `gold_app_account_drift`) |
+| `account_drift.sql` | Drift — account + asset class drill-down | ☐ Needs `gold_app_account_drift` — full dollar columns: actual/target/min/max dollars, rebalance_to_band, rebalance_to_target |
 
 ### Phase 2.5: Advisor Context & Filtering
 - [x] `ahtsa.awm.advisors` table exists with `advisor_id`, `full_name`, `title`, `email`, `rank_order`, initials derivable from `first_name`/`last_name`
 - [x] `AdvisorContext.tsx` — fetches all advisors, holds selected `advisor_id` in state, exposes `params` object and `setAdvisorId`
 - [x] Sidebar `AdvisorPicker` — `<select>` dropdown populated from `advisors` query; switching advisor re-runs all queries instantly
 - [x] `PortfolioPage` wired to `useAdvisor()` — zero hardcoded advisor IDs in component code
-- [ ] Wire `useAdvisor()` into `DocumentsPage` (holdings_list, document_insights queries when migrated)
+- [ ] Wire `useAdvisor()` into `DocumentsPage` (holdings_list and management_tone are live; document_insights and source_citations still mock)
+- [ ] Wire `useAdvisor()` into `DriftPage` for all three drift queries
 
 ### Phase 3: Backend & Lakebase
 - [ ] `server/routes/agents/agent-routes.ts` — `GET /api/agents/cascade`, `POST /api/agents/approve`
@@ -118,7 +180,7 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 
 ### Navigation
 
-Left sidebar (replace current top-nav header). Four sections:
+Left sidebar. Five sections:
 
 ```
 ┌─────────────────────────────┐
@@ -126,6 +188,7 @@ Left sidebar (replace current top-nav header). Four sections:
 │  Goldman Sachs              │
 ├─────────────────────────────┤
 │ ◉ Portfolio Intelligence    │  /
+│ ○ Drift Analysis            │  /drift
 │ ○ Document Intelligence     │  /documents
 │ ○ Agent Orchestration       │  /agents
 │ ○ Genie Chat                │  /genie
@@ -173,9 +236,54 @@ Full-width bento grid. Top row is 4 KPI stat cards. Below is a 3-column grid of 
 ```
 
 Clicking any holding in the Top 10 Holdings table navigates to `/documents?holding=<id>`.  
-Clicking an alert in the feed navigates to `/agents`.
+Clicking the drift alert in the feed navigates to `/drift`.  
+Clicking the covenant alert navigates to `/agents`.
 
-### Page 2: Document Intelligence (`/documents`)
+### Page 2: Drift Analysis (`/drift`)
+
+Three-section layout. Top is a summary bar showing advisor-level drift KPIs including dollar totals. Middle is a client table sorted by total dollars to rebalance to target. Bottom is per-account, per-asset-class detail for the selected client with both % and $ columns.
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ DRIFT SUMMARY (advisor-level, from gold_app_drift_summary)           │
+│                                                                      │
+│ Accts Drifting │ Clients at Risk │ $ to Band (min) │ $ to Target     │
+│      14        │       6         │    $1.2M        │    $4.7M        │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────┐
+│ CLIENT DRIFT TABLE (gold_app_client_drift, sorted by $ to Target)    │
+│                                                                      │
+│  Client              │  AUM    │ Breaches │ Worst Class │ $ to Band │ $ to Target │ Level│
+│  ─────────────────── │ ─────── │ ──────── │ ─────────── │ ───────── │ ─────────── │ ──── │
+│  ▶ Robert Weinstein  │  $48M   │    3     │ Priv Credit │  $480K    │   $2.1M     │  🔴  │
+│  ▶ Sarah Chen        │  $31M   │    2     │ HY Bonds    │  $310K    │   $1.4M     │  🟡  │
+│  ▶ James Park        │  $22M   │    1     │ Equities    │  $110K    │   $620K     │  🟡  │
+│  ▶ ...               │         │          │             │           │             │      │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│ ACCOUNT DETAIL — Robert Weinstein (gold_app_account_drift)                               │
+│                                                                                          │
+│  Account   │ Asset Class    │ Actual$ │ Target$ │ Actual% │ Tgt% │ Min% │ Max% │ Δ%  │ $ to Band │ $ to Target │ Status          │
+│  ───────── │ ─────────────  │ ─────── │ ─────── │ ─────── │ ──── │ ──── │ ──── │ ─── │ ───────── │ ─────────── │ ─────────────── │
+│  Acct 3821 │ Private Credit │ $11.5M  │  $7.2M  │   24%   │  15% │  10% │  20% │ +9% │  $192K    │   $4.3M     │ 🔴 OVER BAND    │
+│  Acct 3821 │ HY Bonds       │  $8.6M  │  $9.6M  │   18%   │  20% │  15% │  25% │ -2% │    $0     │   -$960K    │ ✅ Within Band   │
+│  Acct 7104 │ Private Credit │ $10.5M  │  $6.9M  │   23%   │  15% │  10% │  20% │ +8% │  $138K    │   $3.6M     │ 🔴 OVER BAND    │
+│  Acct 7104 │ Equities       │ $14.7M  │ $18.4M  │   32%   │  40% │  35% │  50% │ -8% │  $138K    │  -$3.7M     │ 🟡 UNDER BAND   │
+│  Acct 7104 │ Alt Assets     │  $2.1M  │   $0    │    5%   │   0% │   0% │   0% │ +5% │   $2.1M   │   $2.1M     │ 🔴 No IPS Target│
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+Clicking a row in the client table expands the account detail panel below. URL param `?client=<client_id>` deep-links from the Portfolio page alerts feed.
+
+**Column notes:**
+- `$ to Band` — minimum trade to stop the breach (0 if Within Band)
+- `$ to Target` — full trade to reach exact IPS target midpoint (positive = buy, negative = sell)
+- `No IPS Target` rows — asset class not in client's risk profile; any balance here is unplanned exposure
+**Drift badge legend:** 🔴 Over Band = actual > max IPS; 🟡 Under Band = actual < min IPS; ✅ Within Band = within tolerance; 🔴 No IPS Target = no allocation target exists for this asset class.
+
+### Page 3: Document Intelligence (`/documents`)
 
 Two-panel layout. Left panel is a document/holding selector. Right panel is the delta view.
 
@@ -385,7 +493,53 @@ Layout structure:
    - Col 1 (span 2): Top Holdings table. Columns: Name, Asset Class, AUM ($M), % Portfolio, YTD Return, Risk. The Risk column renders a colored badge: 🔴 Alert / 🟡 Watch / — None. Each row is clickable; clicking navigates to `/documents?holding=<holding_id>`.
    - Col 2: Active Alerts feed. Hard-coded 2 alerts for now: a red covenant risk alert (Blackstone) and a yellow drift alert (Private Credit). Clicking covenant alert navigates to `/agents`. Both are styled as clickable list items with an icon, title, and "2 min ago" timestamp.
 
-**Acceptance criteria:** Dashboard renders with real data from SQL warehouse. Clicking a holding navigates to Documents page. Clicking the covenant alert navigates to Agents page.
+**Acceptance criteria:** Dashboard renders with real data from SQL warehouse. Clicking a holding navigates to Documents page. Clicking the covenant alert navigates to Agents page. Clicking the drift alert navigates to `/drift`.
+
+---
+
+### Phase 2.5: Drift Analysis (`/drift`)
+
+**Goal:** Surface IPS drift at every level of granularity — advisor-wide summary → client-level breach scores → per-account, per-asset-class band violations with full dollar context. The advisor should immediately know: which accounts are out of band, by how much in dollars, and exactly how much to trade to fix it.
+
+**Drift exists at three granularities:**
+- **Advisor level** (portfolio-wide): total drifting accounts, clients at risk, total dollars to rebalance to target
+- **Client level**: breach count, worst asset class, total `rebalance_to_target` across all their accounts
+- **Account + asset class level**: actual vs. target vs. band (all in both % and $), `rebalance_to_band` (min trade), `rebalance_to_target` (full trade)
+
+**Key dollar distinctions:**
+- `rebalance_to_band` — minimum trade to get back inside IPS fence (stop the breach)
+- `rebalance_to_target` — full trade to hit exact IPS midpoint target (full rebalance)
+- Accounts with no IPS target for an asset class → `target_dollars = 0`; any holdings there are drift by definition
+
+**SQL files to create** (all backed by `gold_app_account_drift`):
+
+`drift_summary.sql` — Single row per advisor. Columns: `drifting_accounts`, `clients_at_risk`, `worst_asset_class`, `total_rebalance_to_band`, `total_rebalance_to_target`. Queries `gold_app_drift_summary WHERE advisor_id = :advisor_id`.
+
+`client_drift.sql` — One row per client for this advisor. Columns: `client_id`, `client_name`, `total_aum_millions`, `breach_count`, `worst_asset_class`, `total_rebalance_to_band`, `total_rebalance_to_target`, `drift_level` (high/medium/low). Sorted by `total_rebalance_to_target` desc. Queries `gold_app_client_drift WHERE advisor_id = :advisor_id`.
+
+`account_drift.sql` — Per-account, per-asset-class rows with full dollar columns. Parameterized by `:advisor_id` + optional `:client_id`. Queries `gold_app_account_drift`. Returns all columns from the spec below.
+
+**Gold tables to build** (add to data notebook, build in this order):
+
+1. `gold_app_account_drift` — materialize the `gold_ips_drift` view + extend with dollar columns. Full spec in the **column table above**. This is the foundation; the other two aggregate from it.
+
+2. `gold_app_client_drift` — `SELECT ... FROM gold_app_account_drift GROUP BY advisor_id, client_id`. Aggregates: `SUM(rebalance_to_band)`, `SUM(ABS(rebalance_to_target))`, `COUNT(DISTINCT account_id) FILTER (drift_status != 'Within Band')` as `breach_count`, `worst_asset_class` (asset_class with max `ABS(delta_dollars)`).
+
+3. `gold_app_drift_summary` — `SELECT ... FROM gold_app_client_drift GROUP BY advisor_id`. Aggregates: `COUNT(DISTINCT account_id with breach)`, `COUNT(DISTINCT client_id with breach)`, `worst_asset_class`, `SUM(total_rebalance_to_band)`, `SUM(total_rebalance_to_target)`.
+
+**Component to build:** `client/src/pages/drift/DriftPage.tsx`
+
+Layout:
+1. Page header: "Drift Analysis" h2 + advisor subtitle
+2. Summary bar: 4 KPI stat cards — `drifting_accounts`, `clients_at_risk`, `total_rebalance_to_band` (formatted as $M), `total_rebalance_to_target` (formatted as $M). Wire to `drift_summary` query.
+3. Client drift table (full width): sortable columns. Default sort: `total_rebalance_to_target` desc. Columns: Client Name, AUM ($M), # Breaches, Worst Asset Class, $ to Band, $ to Target, Drift Level badge (🔴 High / 🟡 Medium / ✅ Low). Clicking a row sets `selectedClientId` and scrolls to account drill-down. URL param `?client=<client_id>` deep-links from Portfolio alerts.
+4. Account drill-down section: shown when a client is selected. Header: "[Client Name] — Account & Asset Class Detail". 
+   - Table columns: Account, Asset Class, Actual $, Actual %, Target %, Min %, Max %, Δ%, Δ$, $ to Band, $ to Target, Status badge.
+   - "Over Band" rows: red background tint. "Under Band": amber. "Within Band": default.
+   - Rows where `target_pct = 0` but `actual_dollars > 0`: show status as "No IPS Target" in muted red — this asset class is not in the IPS at all.
+   - Wire to `account_drift` query filtered by `client_id`.
+
+**Acceptance criteria:** Page loads with advisor's drift summary including dollar totals. Client table shows all clients sorted by dollar impact. Clicking a client expands account detail with both % and $ columns. `$ to Band` and `$ to Target` are distinct — band is always smaller or equal. Accounts with no target for an asset class show "No IPS Target" status with $0 target.
 
 ---
 
@@ -545,6 +699,12 @@ client/src/
         AssetAllocationChart.tsx             ← new (donut/bar)
         HoldingsTable.tsx                    ← new (clickable rows)
         AlertsFeed.tsx                       ← new
+    drift/
+      DriftPage.tsx                          ← new (drift analysis, 3-level granularity)
+      components/
+        DriftSummaryBar.tsx                  ← new (advisor KPI cards)
+        ClientDriftTable.tsx                 ← new (sortable, clickable rows)
+        AccountDrillDown.tsx                 ← new (per-account, per-asset-class detail)
     documents/
       DocumentsPage.tsx                      ← new (two-panel)
       components/
@@ -565,13 +725,16 @@ client/src/
       GeniePage.tsx                          ← modified (header + prompt chips)
 
 config/queries/
-  portfolio_summary.sql                      ← new
-  asset_allocation.sql                       ← new
-  performance_timeseries.sql                 ← new
-  top_holdings.sql                           ← new
-  concentration_risk.sql                     ← new
-  holdings_list.sql                          ← new
-  document_insights.sql                      ← new (parameterized)
+  portfolio_summary.sql                      ← live
+  asset_allocation.sql                       ← live
+  performance_timeseries.sql                 ← live
+  top_holdings.sql                           ← live
+  concentration_risk.sql                     ← live
+  holdings_list.sql                          ← live
+  document_insights.sql                      ← mock CTE (needs migration)
+  drift_summary.sql                          ← new (needs gold_app_drift_summary)
+  client_drift.sql                           ← new (needs gold_app_client_drift)
+  account_drift.sql                          ← new (needs gold_app_account_drift)
 
 server/
   server.ts                                  ← add agent_runs + client_comms table creation
@@ -586,12 +749,13 @@ server/
 
 Build in this order — each phase is independently testable:
 
-1. **Phase 1** — Sidebar layout + stub pages (no data yet)
-2. **Phase 2** — Portfolio dashboard (SQL queries + charts)
-3. **Phase 3** — Document Intelligence (SQL query + two-panel UI)
-4. **Phase 4** — Agent Orchestration (backend route + Lakebase + approval UI)
-5. **Phase 5** — Genie chat framing (minimal changes to existing page)
-6. **Phase 6** — Polish (CSS vars, skeletons, error states, nav styling)
+1. **Phase 1** — Sidebar layout + stub pages (no data yet) ✅
+2. **Phase 2** — Portfolio dashboard (SQL queries + charts) ✅
+3. **Phase 2.5** — Drift Analysis page (3 new gold tables → 3 SQL files → DriftPage UI)
+4. **Phase 3** — Document Intelligence (SQL query + two-panel UI)
+5. **Phase 4** — Agent Orchestration (backend route + Lakebase + approval UI)
+6. **Phase 5** — Genie chat framing (minimal changes to existing page)
+7. **Phase 6** — Polish (CSS vars, skeletons, error states, nav styling)
 
 Run `npm run dev` after each phase to verify before proceeding.
 
@@ -602,12 +766,16 @@ Run `npm run dev` after each phase to verify before proceeding.
 The live demo flow:
 
 1. Open app → Portfolio Dashboard loads instantly showing $2.4B AUM, +1.8% vs benchmark. Bento grid shows full picture.
-2. Notice the red "Alert" badge on Blackstone in the holdings table. Click it → lands on Document Intelligence.
-3. Right panel shows covenant headroom compressed from 0.7x → 0.3x. Red gauge bar. "APPROACHING BREACH."
-4. Narrator: "The system read the filing — the advisor didn't."
-5. Click back to dashboard → click the red covenant alert in the feed → lands on Agent Orchestration.
-6. Agent cascade is already complete. Three agents ran in the background. Three clients identified. Three draft emails ready.
-7. Advisor reviews Robert Weinstein's draft communication. Clicks "Approve & Send." Green success state.
-8. Narrator: "Before the advisor opened their laptop, the system already diagnosed the risk, identified the clients, and drafted the response."
-9. Switch to Genie tab. Type (or click chip): "Which of my top 20 clients are overweight private credit vs. IPS target?"
-10. Genie returns a table with Robert Weinstein at the top — the same client from step 7. Closes the loop.
+2. Notice the yellow drift alert in the Alerts feed ("Private Credit above IPS target"). Click it → lands on Drift Analysis.
+3. Drift Analysis shows 14 drifting accounts, 6 clients at risk. Robert Weinstein is #1 sorted by breach severity — 3 breaches, Private Credit 9% over IPS band.
+4. Click Weinstein → account drill-down shows two accounts, each with Private Credit in the red "Over Band" zone with actual vs. target vs. min/max bands.
+5. Narrator: "The advisor can see exactly which accounts need rebalancing before any client call."
+6. Click back to dashboard → notice the red "Alert" badge on Blackstone in the holdings table. Click it → lands on Document Intelligence.
+7. Right panel shows covenant headroom compressed from 0.7x → 0.3x. Red gauge bar. "APPROACHING BREACH."
+8. Narrator: "The system read the filing — the advisor didn't."
+9. Click back to dashboard → click the red covenant alert in the feed → lands on Agent Orchestration.
+10. Agent cascade is already complete. Three agents ran in the background. Three clients identified. Three draft emails ready.
+11. Advisor reviews Robert Weinstein's draft communication (same client from step 3). Clicks "Approve & Send." Green success state.
+12. Narrator: "Before the advisor opened their laptop, the system already diagnosed the risk, identified the clients, and drafted the response."
+13. Switch to Genie tab. Type (or click chip): "Which of my top 20 clients are overweight private credit vs. IPS target?"
+14. Genie returns a table with Robert Weinstein at the top — the same client from step 3 and 11. Closes the loop.

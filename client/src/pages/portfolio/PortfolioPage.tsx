@@ -4,7 +4,6 @@ import {
   useAnalyticsQuery,
   AreaChart,
   DonutChart,
-  HeatmapChart,
   Card,
   CardContent,
   CardHeader,
@@ -347,30 +346,12 @@ export function PortfolioPage() {
           <CardContent>
             <AlertsFeed
               onCovenantClick={() => navigate('/agents')}
-              onDriftClick={() => navigate('/documents')}
+              onDriftClick={() => navigate('/drift')}
             />
           </CardContent>
         </Card>
       </div>
 
-      {/* Bento row 3: Concentration risk heatmap */}
-      <Card className="shadow-sm">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-semibold">
-            Client Concentration Risk — Allocation vs IPS Target (Δ%)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <HeatmapChart
-            queryKey="concentration_risk"
-            parameters={advisorParams}
-            yAxisKey="client_name"
-            showLabels
-            min={-10}
-            max={10}
-          />
-        </CardContent>
-      </Card>
     </div>
   );
 }

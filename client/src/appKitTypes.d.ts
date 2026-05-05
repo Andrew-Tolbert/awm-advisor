@@ -5,6 +5,61 @@ import type { SQLTypeMarker, SQLStringMarker, SQLNumberMarker, SQLBooleanMarker,
 
 declare module "@databricks/appkit-ui/react" {
   interface QueryRegistry {
+    account_drift: {
+        name: "account_drift";
+        parameters: {
+          /** STRING - use sql.string() */
+          advisor_id: SQLStringMarker;
+        };
+        result: Array<{
+          /** @sqlType STRING */
+          advisor_id: string;
+          /** @sqlType STRING */
+          client_id: string;
+          /** @sqlType STRING */
+          client_name: string;
+          /** @sqlType STRING */
+          account_id: string;
+          /** @sqlType STRING */
+          account_name: string;
+          /** @sqlType DOUBLE */
+          account_aum: number;
+          /** @sqlType STRING */
+          asset_class: string;
+          /** @sqlType DOUBLE */
+          actual_dollars: number;
+          /** @sqlType DOUBLE */
+          actual_pct: number;
+          /** @sqlType DOUBLE */
+          target_pct: number;
+          /** @sqlType DOUBLE */
+          min_pct: number;
+          /** @sqlType DOUBLE */
+          max_pct: number;
+          /** @sqlType DOUBLE */
+          target_dollars: number;
+          /** @sqlType DOUBLE */
+          min_dollars: number;
+          /** @sqlType DOUBLE */
+          max_dollars: number;
+          /** @sqlType DOUBLE */
+          delta_pct: number;
+          /** @sqlType DOUBLE */
+          delta_dollars: number;
+          /** @sqlType STRING */
+          drift_status: string;
+          /** @sqlType DOUBLE */
+          band_distance_pct: number;
+          /** @sqlType DOUBLE */
+          rebalance_to_band: number;
+          /** @sqlType DOUBLE */
+          rebalance_to_target: number;
+          /** @sqlType STRING */
+          risk_profile: string;
+          /** @sqlType STRING */
+          drift_severity: string;
+        }>;
+      };
     advisors: {
         name: "advisors";
         parameters: Record<string, never>;
@@ -35,14 +90,14 @@ declare module "@databricks/appkit-ui/react" {
     concentration_risk: {
         name: "concentration_risk";
         parameters: {
-          /** any - use sql.*() */
-          advisor_id: SQLTypeMarker;
+          /** STRING - use sql.string() */
+          advisor_id: SQLStringMarker;
         };
         result: Array<{
           /** @sqlType STRING */
           asset_class: string;
           /** @sqlType STRING */
-          client_name: string;
+          risk_profile: string;
           /** @sqlType DOUBLE */
           delta_pct: number;
         }>;
