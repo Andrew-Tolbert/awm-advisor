@@ -13,5 +13,6 @@ SELECT
 FROM ahtsa.awm.gold_account_ips_drift
 WHERE advisor_id = :advisor_id
   AND target_allocation_pct > 0
+  AND asset_class != 'Cash'
 GROUP BY asset_class, risk_profile
 ORDER BY asset_class, delta_pct DESC

@@ -17,12 +17,15 @@ interface HoldingItem {
 }
 
 interface InsightRow {
+  sort_order: number;
   kpi_name: string;
   prior_value: string;
   current_value: string;
   change_pct: number;
   flag: string;
   covenant_value: number;
+  prior_period: string;
+  current_period: string;
 }
 
 // ── Types (query results) ─────────────────────────────────────────────────────
@@ -204,8 +207,8 @@ export function DocumentsPage() {
     [selectedId],
   );
   const queryOpts = { autoStart: !!selectedId };
-  const { data: insights,  loading: insightsLoading } = useAnalyticsQuery('document_insights', insightParams, queryOpts);
-  const { data: citesData, loading: citesLoading }    = useAnalyticsQuery('source_citations',  insightParams, queryOpts);
+  const { data: insights,  loading: insightsLoading } = useAnalyticsQuery('company_fundamentals', insightParams, queryOpts);
+  const { data: citesData, loading: citesLoading }    = useAnalyticsQuery('source_citations',     insightParams, queryOpts);
 
   // Load all management tone rows once — filter client-side by selectedId
   const { data: allToneData, loading: toneLoading, error: toneError } = useAnalyticsQuery('management_tone');
@@ -311,43 +314,53 @@ export function DocumentsPage() {
           {selectedHolding && <AssetClassBadge cls={selectedHolding.asset_class} />}
         </div>
 
-        {/* KPI Delta Table */}
-        <Card className="shadow-sm">
-          <CardContent className="pt-4">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Key Metrics — Q2 vs Q3 2025</p>
-            {insightsLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
-              </div>
-            ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
-                    <th className="text-left py-2 pr-6 font-medium">KPI</th>
-                    <th className="text-right py-2 pr-6 font-medium">Prior Period</th>
-                    <th className="text-right py-2 pr-6 font-medium">Current Period</th>
-                    <th className="text-right py-2 font-medium">Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.kpi_name} className="border-b last:border-0">
-                      <td className="py-2.5 pr-6 font-medium text-foreground">{r.kpi_name}</td>
-                      <td className="py-2.5 pr-6 text-right text-muted-foreground">{r.prior_value}</td>
-                      <td className="py-2.5 pr-6 text-right"><FlagCell flag={r.flag} value={r.current_value} /></td>
-                      <td className={`py-2.5 text-right text-xs tabular-nums ${r.change_pct < 0 ? 'text-red-500' : 'text-emerald-600'}`}>
-                        {r.change_pct > 0 ? '+' : ''}{Number(r.change_pct).toFixed(1)}%
-                      </td>
+        {/* KPI Delta Table — only when a holding is selected and data exists */}
+        {selectedId && (insightsLoading || rows.length > 0) && (
+          <Card className="shadow-sm">
+            <CardContent className="pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                {rows[0]
+                  ? `Key Metrics — ${rows[0].prior_period} vs ${rows[0].current_period}`
+                  : 'Key Metrics'}
+              </p>
+              {insightsLoading ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
+                      <th className="text-left py-2 pr-6 font-medium">KPI</th>
+                      <th className="text-right py-2 pr-6 font-medium">Prior</th>
+                      <th className="text-right py-2 pr-6 font-medium">Current</th>
+                      <th className="text-right py-2 font-medium">Change</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </CardContent>
-        </Card>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.kpi_name} className="border-b last:border-0">
+                        <td className="py-2.5 pr-6 font-medium text-foreground">{r.kpi_name}</td>
+                        <td className="py-2.5 pr-6 text-right text-muted-foreground tabular-nums">{r.prior_value}</td>
+                        <td className="py-2.5 pr-6 text-right tabular-nums"><FlagCell flag={r.flag} value={r.current_value} /></td>
+                        <td className={`py-2.5 text-right text-xs tabular-nums ${
+                          r.flag === 'up' ? 'text-emerald-600' :
+                          r.flag === 'alert' ? 'text-red-600' :
+                          'text-orange-500'
+                        }`}>
+                          {Number(r.change_pct) > 0 ? '+' : ''}{Number(r.change_pct).toFixed(1)}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Covenant Health — only shown when data is present */}
-        {!insightsLoading && covenantRow && (
+        {/* Covenant Health — only shown when a covenant value > 0 is present */}
+        {!insightsLoading && covenantRow && Number(covenantRow.covenant_value) > 0 && (
           <Card className="shadow-sm">
             <CardContent className="pt-4 space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Covenant Health</p>

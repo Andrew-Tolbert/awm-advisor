@@ -30,4 +30,5 @@ SELECT
 FROM ahtsa.awm.gold_account_ips_drift
 WHERE advisor_id = :advisor_id
   AND drift_status != 'No IPS Target'
+  AND asset_class != 'Cash'
 ORDER BY client_id, account_id, asset_class

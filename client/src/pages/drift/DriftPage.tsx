@@ -141,7 +141,7 @@ interface AssetClassStats {
 }
 
 function AssetClassSummary({ stats, loading }: { stats: AssetClassStats[]; loading: boolean }) {
-  const ORDER = ['Equity', 'Alternatives', 'Fixed Income', 'Private Credit', 'ETF', 'Cash'];
+  const ORDER = ['Equity', 'Alternatives', 'Fixed Income', 'Private Credit', 'ETF'];
   const sorted = [...stats].sort(
     (a, b) => ORDER.indexOf(a.assetClass) - ORDER.indexOf(b.assetClass),
   );
