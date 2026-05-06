@@ -5,7 +5,7 @@ import {
   BookOpen,
   Activity,
   Sparkles,
-  LayoutDashboard,
+  Database,
   ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
@@ -61,11 +61,11 @@ const STACK_ITEMS: StackItem[] = [
     accent: 'from-fuchsia-500/15 to-fuchsia-500/5 text-fuchsia-600',
   },
   {
-    name: 'Dashboard',
-    category: 'AI/BI Dashboard',
-    description: 'Published Lakeview dashboard summarizing portfolio exposures, risk metrics, and cascade outcomes.',
-    href: 'https://e2-demo-field-eng.cloud.databricks.com/dashboardsv3/01f142dfebb71521b206239da8aa1d3d/published?o=1444828305810485',
-    icon: LayoutDashboard,
+    name: 'Unity Catalog',
+    category: 'Governance & Lineage',
+    description: 'End-to-end data lineage across the AWM Lakehouse — trace any column from bronze ingestion through gold tables and into the app.',
+    href: 'https://e2-demo-field-eng.cloud.databricks.com/explore/data/ahtsa/awm/clients?o=1444828305810485&activeTab=lineage',
+    icon: Database,
     accent: 'from-rose-500/15 to-rose-500/5 text-rose-600',
   },
 ];
