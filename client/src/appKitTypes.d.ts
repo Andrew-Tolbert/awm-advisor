@@ -74,6 +74,43 @@ declare module "@databricks/appkit-ui/react" {
           initials: string;
         }>;
       };
+    alerts: {
+        name: "alerts";
+        parameters: {
+          /** STRING - use sql.string() */
+          advisor_id: SQLStringMarker;
+        };
+        result: Array<{
+          /** @sqlType STRING */
+          signal_id: string;
+          /** @sqlType STRING */
+          symbol: string;
+          /** @sqlType STRING */
+          company_name: string;
+          /** @sqlType DATE */
+          signal_date: string;
+          /** @sqlType STRING */
+          source_type: string;
+          /** @sqlType STRING */
+          source_description: string;
+          /** @sqlType STRING */
+          sentiment: string;
+          /** @sqlType DOUBLE */
+          severity_score: number;
+          /** @sqlType BOOLEAN */
+          advisor_action_needed: boolean;
+          /** @sqlType STRING */
+          signal_type: string;
+          /** @sqlType STRING */
+          signal: string;
+          /** @sqlType STRING */
+          signal_value: string;
+          /** @sqlType DOUBLE */
+          total_exposure: number;
+          /** @sqlType STRING */
+          rationale: string;
+        }>;
+      };
     asset_allocation: {
         name: "asset_allocation";
         parameters: {

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 import { useAnalyticsQuery, Card, CardContent, Skeleton } from '@databricks/appkit-ui/react';
 import { sql } from '@databricks/appkit-ui/js';
-import { AlertTriangle, FileText } from 'lucide-react';
+import { AlertTriangle, AlertCircle, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAdvisor } from '../../contexts/AdvisorContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -63,16 +63,137 @@ const DOCUMENTS = [
 
 function AssetClassBadge({ cls }: { cls: string }) {
   const colors: Record<string, string> = {
-    'Private Equity':  'bg-blue-50 text-blue-700 border-blue-200',
-    'Private Credit':  'bg-amber-50 text-amber-700 border-amber-200',
-    'High Yield':      'bg-emerald-50 text-emerald-700 border-emerald-200',
-    'Public Equities': 'bg-purple-50 text-purple-700 border-purple-200',
-    'ETFs':            'bg-slate-50 text-slate-600 border-slate-200',
+    'Equity':         'bg-blue-50 text-blue-700 border-blue-200',
+    'Fixed Income':   'bg-teal-50 text-teal-700 border-teal-200',
+    'Alternatives':   'bg-purple-50 text-purple-700 border-purple-200',
+    'Private Credit': 'bg-amber-50 text-amber-700 border-amber-200',
+    'Commodities':    'bg-orange-50 text-orange-700 border-orange-200',
   };
   return (
     <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${colors[cls] ?? 'bg-muted text-muted-foreground border-border'}`}>
       {cls}
     </span>
+  );
+}
+
+function StrategyBadge({ strategy }: { strategy: string }) {
+  const colors: Record<string, string> = {
+    'Technology':              'bg-violet-50 text-violet-700 border-violet-200',
+    'Financial Services':      'bg-sky-50 text-sky-700 border-sky-200',
+    'Healthcare':              'bg-rose-50 text-rose-700 border-rose-200',
+    'Industrials':             'bg-slate-100 text-slate-700 border-slate-300',
+    'Consumer Cyclical':       'bg-orange-50 text-orange-700 border-orange-200',
+    'Consumer Defensive':      'bg-lime-50 text-lime-700 border-lime-200',
+    'Communication Services':  'bg-indigo-50 text-indigo-700 border-indigo-200',
+    'Energy':                  'bg-yellow-50 text-yellow-700 border-yellow-300',
+    'Utilities':               'bg-cyan-50 text-cyan-700 border-cyan-200',
+    'Basic Materials':         'bg-stone-100 text-stone-700 border-stone-300',
+    'Real Estate':             'bg-red-50 text-red-700 border-red-200',
+    'Real Estate (Listed/REITs)': 'bg-red-50 text-red-700 border-red-200',
+    'International Equity':    'bg-blue-50 text-blue-600 border-blue-200',
+    'Large Cap Equity':        'bg-blue-50 text-blue-800 border-blue-300',
+    'Cash & Others':           'bg-gray-50 text-gray-500 border-gray-200',
+    'Alternatives':            'bg-purple-50 text-purple-700 border-purple-200',
+    'Fixed Income':            'bg-teal-50 text-teal-700 border-teal-200',
+    'Equity':                  'bg-blue-50 text-blue-700 border-blue-200',
+  };
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium ${colors[strategy] ?? 'bg-muted text-muted-foreground border-border'}`}>
+      {strategy}
+    </span>
+  );
+}
+
+// ── Alert signal types ────────────────────────────────────────────────────────
+
+interface AlertSignalRow {
+  signal_id: string;
+  symbol: string;
+  company_name: string;
+  signal_date: string;
+  source_type: string;
+  source_description: string;
+  sentiment: string;
+  severity_score: number;
+  advisor_action_needed: boolean;
+  signal_type: string;
+  signal: string;
+  signal_value: string;
+  total_exposure: number;
+  rationale: string;
+}
+
+const BANNER_COLORS = {
+  positive: {
+    wrap:   'bg-emerald-50 border-emerald-200',
+    icon:   'text-emerald-500',
+    title:  'text-emerald-700',
+    btn:    'border-emerald-300 text-emerald-700 hover:bg-emerald-100',
+  },
+  critical: {
+    wrap:   'bg-red-50 border-red-200',
+    icon:   'text-red-500',
+    title:  'text-red-700',
+    btn:    'border-red-300 text-red-700 hover:bg-red-100',
+  },
+  warning: {
+    wrap:   'bg-amber-50 border-amber-200',
+    icon:   'text-amber-500',
+    title:  'text-amber-700',
+    btn:    'border-amber-300 text-amber-700 hover:bg-amber-100',
+  },
+};
+
+function AlertBanner({ alert }: { alert: AlertSignalRow }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const sentiment = alert.sentiment?.toLowerCase() ?? '';
+  const variant: keyof typeof BANNER_COLORS =
+    sentiment === 'positive' || sentiment === 'improving'
+      ? 'positive'
+      : Number(alert.severity_score) >= 0.8 && alert.advisor_action_needed
+      ? 'critical'
+      : 'warning';
+  const c = BANNER_COLORS[variant];
+
+  const fmtExposure = (v: number) => {
+    const n = Number(v);
+    if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+    if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+    return `$${n.toFixed(0)}`;
+  };
+
+  return (
+    <div className={`rounded-lg border ${c.wrap}`}>
+      <div className="flex items-start gap-2.5 p-3">
+        <AlertCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${c.icon}`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className={`text-xs font-semibold ${c.title}`}>
+                {alert.signal_type}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {fmtExposure(alert.total_exposure)} exposure · {alert.source_description}
+              </p>
+            </div>
+            <button
+              onClick={() => setExpanded((e) => !e)}
+              className={`flex-shrink-0 flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors ${c.btn}`}
+            >
+              {expanded ? 'Collapse' : 'View Analysis'}
+              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
+          </div>
+
+          {expanded && (
+            <p className="text-xs text-foreground mt-2.5 pt-2.5 border-t border-current/10 leading-relaxed">
+              {alert.rationale}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -187,11 +308,19 @@ function ManagementTonePanel({ rows, loading, error }: { rows: ToneRow[]; loadin
 export function DocumentsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string>(searchParams.get('holding') ?? '');
+  const [assetClassFilter, setAssetClassFilter] = useState<string>(searchParams.get('asset_class') ?? '');
+  const [strategyFilter, setStrategyFilter]     = useState<string>(searchParams.get('strategy') ?? '');
 
   const { params: advisorParams } = useAdvisor();
   const { data: holdingsList, loading: listLoading } = useAnalyticsQuery('holdings_list', advisorParams);
 
-  // Auto-select first holding once list loads (if no URL param is set)
+  // Sync filter state when URL params change (e.g. navigating from another page)
+  useEffect(() => {
+    setAssetClassFilter(searchParams.get('asset_class') ?? '');
+    setStrategyFilter(searchParams.get('strategy') ?? '');
+  }, [searchParams.get('asset_class'), searchParams.get('strategy')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-select first matching holding once list loads (or when filters change)
   useEffect(() => {
     const urlHolding = searchParams.get('holding');
     if (urlHolding && urlHolding !== selectedId) {
@@ -212,6 +341,7 @@ export function DocumentsPage() {
 
   // Load all management tone rows once — filter client-side by selectedId
   const { data: allToneData, loading: toneLoading, error: toneError } = useAnalyticsQuery('management_tone');
+  const { data: alertsData } = useAnalyticsQuery('alerts', advisorParams);
 
   const holdings = (holdingsList ?? []) as HoldingItem[];
   const rows     = (insights   ?? []) as InsightRow[];
@@ -228,18 +358,44 @@ export function DocumentsPage() {
 
   const [holdingSearch, setHoldingSearch] = useState('');
 
+  const selectedAlert = useMemo(() => {
+    const rows = (alertsData ?? []) as unknown as AlertSignalRow[];
+    return rows.find((r) => r.symbol === selectedId) ?? null;
+  }, [alertsData, selectedId]);
+
+  const assetClasses = useMemo(() => [...new Set(holdings.map((h) => h.asset_class))].sort(), [holdings]);
+  const strategies   = useMemo(() => {
+    const base = assetClassFilter ? holdings.filter((h) => h.asset_class === assetClassFilter) : holdings;
+    return [...new Set(base.map((h) => h.strategy))].sort();
+  }, [holdings, assetClassFilter]);
+
   const filteredHoldings = useMemo(() => {
     const q = holdingSearch.toLowerCase();
-    return q ? holdings.filter((h) => h.name.toLowerCase().includes(q) || h.asset_class.toLowerCase().includes(q)) : holdings;
-  }, [holdings, holdingSearch]);
+    return holdings.filter((h) =>
+      (!assetClassFilter || h.asset_class === assetClassFilter) &&
+      (!strategyFilter   || h.strategy   === strategyFilter) &&
+      (!q || h.name.toLowerCase().includes(q) || h.asset_class.toLowerCase().includes(q) || h.strategy.toLowerCase().includes(q))
+    );
+  }, [holdings, holdingSearch, assetClassFilter, strategyFilter]);
+
+  function applyFilter(ac: string, strat: string) {
+    setAssetClassFilter(ac);
+    setStrategyFilter(strat);
+    // auto-select first match
+    const first = holdings.find((h) =>
+      (!ac   || h.asset_class === ac) &&
+      (!strat || h.strategy   === strat)
+    );
+    if (first) selectHolding(first.holding_id);
+  }
 
   return (
     <div className="flex gap-0 border rounded-lg overflow-hidden max-w-[1400px]" style={{ height: 'calc(100vh - 120px)' }}>
 
       {/* ── Left panel: holdings + docs list ── */}
       <div className="w-64 flex-shrink-0 border-r bg-muted/20 flex flex-col min-h-0">
-        <div className="px-4 py-3 border-b flex-shrink-0">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Holdings</p>
+        <div className="px-3 py-3 border-b flex-shrink-0 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Holdings</p>
           <input
             type="text"
             placeholder="Search…"
@@ -247,10 +403,30 @@ export function DocumentsPage() {
             onChange={(e) => setHoldingSearch(e.target.value)}
             className="w-full h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
           />
-          {holdingSearch && (
-            <p className="text-[10px] text-muted-foreground mt-1">
-              {filteredHoldings.length} of {holdings.length}
-            </p>
+          <select
+            value={assetClassFilter}
+            onChange={(e) => applyFilter(e.target.value, '')}
+            className="w-full h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">All asset classes</option>
+            {assetClasses.map((ac) => <option key={ac} value={ac}>{ac}</option>)}
+          </select>
+          <select
+            value={strategyFilter}
+            onChange={(e) => applyFilter(assetClassFilter, e.target.value)}
+            className="w-full h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+          >
+            <option value="">All strategies</option>
+            {strategies.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+          {(assetClassFilter || strategyFilter || holdingSearch) && (
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-muted-foreground">{filteredHoldings.length} of {holdings.length}</p>
+              <button
+                onClick={() => { setAssetClassFilter(''); setStrategyFilter(''); setHoldingSearch(''); }}
+                className="text-[10px] text-muted-foreground hover:text-foreground underline"
+              >Clear</button>
+            </div>
           )}
         </div>
         <div className="flex-1 overflow-y-auto min-h-0">
@@ -274,8 +450,9 @@ export function DocumentsPage() {
                     {h.risk_flag === 'alert' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
                     {h.risk_flag === 'watch' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
                   </div>
-                  <div className="mt-0.5">
+                  <div className="mt-1 flex items-center gap-1 flex-wrap">
                     <AssetClassBadge cls={h.asset_class} />
+                    <StrategyBadge strategy={h.strategy} />
                   </div>
                 </button>
               ))
@@ -302,59 +479,90 @@ export function DocumentsPage() {
       {/* ── Right panel: delta view ── */}
       <div className="flex-1 overflow-y-auto min-h-0 p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
-          <div>
+        <div className="flex items-start gap-3">
+          <div className="flex-1">
             <h2 className="text-xl font-semibold text-foreground">
               {selectedHolding?.name ?? '—'} — Document Delta
             </h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {selectedHolding?.strategy} · {selectedHolding?.asset_class}
-            </p>
+            {selectedHolding && (
+              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                <AssetClassBadge cls={selectedHolding.asset_class} />
+                <StrategyBadge strategy={selectedHolding.strategy} />
+              </div>
+            )}
           </div>
-          {selectedHolding && <AssetClassBadge cls={selectedHolding.asset_class} />}
         </div>
+
+        {/* Alert banner — shown when this holding has a curated signal */}
+        {selectedAlert && <AlertBanner alert={selectedAlert} />}
 
         {/* KPI Delta Table — only when a holding is selected and data exists */}
         {selectedId && (insightsLoading || rows.length > 0) && (
           <Card className="shadow-sm">
             <CardContent className="pt-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                {rows[0]
-                  ? `Key Metrics — ${rows[0].prior_period} vs ${rows[0].current_period}`
-                  : 'Key Metrics'}
-              </p>
-              {insightsLoading ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
-                </div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
-                      <th className="text-left py-2 pr-6 font-medium">KPI</th>
-                      <th className="text-right py-2 pr-6 font-medium">Prior</th>
-                      <th className="text-right py-2 pr-6 font-medium">Current</th>
-                      <th className="text-right py-2 font-medium">Change</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => (
-                      <tr key={r.kpi_name} className="border-b last:border-0">
-                        <td className="py-2.5 pr-6 font-medium text-foreground">{r.kpi_name}</td>
-                        <td className="py-2.5 pr-6 text-right text-muted-foreground tabular-nums">{r.prior_value}</td>
-                        <td className="py-2.5 pr-6 text-right tabular-nums"><FlagCell flag={r.flag} value={r.current_value} /></td>
-                        <td className={`py-2.5 text-right text-xs tabular-nums ${
-                          r.flag === 'up' ? 'text-emerald-600' :
-                          r.flag === 'alert' ? 'text-red-600' :
-                          'text-orange-500'
-                        }`}>
-                          {Number(r.change_pct) > 0 ? '+' : ''}{Number(r.change_pct).toFixed(1)}%
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              {(() => {
+                const companyRows = rows.filter((r) => r.sort_order < 101);
+                const bdcRows     = rows.filter((r) => r.sort_order >= 101);
+                const titleRow    = companyRows[0] ?? bdcRows[0];
+                return (
+                  <>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                      {titleRow
+                        ? `Key Metrics — ${titleRow.prior_period} vs ${titleRow.current_period}`
+                        : 'Key Metrics'}
+                    </p>
+                    {insightsLoading ? (
+                      <div className="space-y-1.5">
+                        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-6 w-full" />)}
+                      </div>
+                    ) : (
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b text-[10px] text-muted-foreground uppercase tracking-wider">
+                            <th className="text-left py-1.5 pr-4 font-medium">KPI</th>
+                            <th className="text-right py-1.5 pr-4 font-medium">Prior</th>
+                            <th className="text-right py-1.5 pr-4 font-medium">Current</th>
+                            <th className="text-right py-1.5 font-medium">Δ</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {companyRows.map((r) => (
+                            <tr key={r.kpi_name} className="border-b last:border-0">
+                              <td className="py-1.5 pr-4 font-medium text-foreground">{r.kpi_name}</td>
+                              <td className="py-1.5 pr-4 text-right text-muted-foreground tabular-nums">{r.prior_value}</td>
+                              <td className="py-1.5 pr-4 text-right tabular-nums"><FlagCell flag={r.flag} value={r.current_value} /></td>
+                              <td className={`py-1.5 text-right tabular-nums ${r.flag === 'up' ? 'text-emerald-600' : r.flag === 'alert' ? 'text-red-600' : 'text-orange-500'}`}>
+                                {r.change_pct != null ? `${Number(r.change_pct) > 0 ? '+' : ''}${Number(r.change_pct).toFixed(1)}%` : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                          {bdcRows.length > 0 && (
+                            <>
+                              <tr>
+                                <td colSpan={4} className="pt-3 pb-1">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                                    Private Credit Health · {bdcRows[0].prior_period} vs {bdcRows[0].current_period}
+                                  </p>
+                                </td>
+                              </tr>
+                              {bdcRows.map((r) => (
+                                <tr key={r.kpi_name} className="border-b last:border-0">
+                                  <td className="py-1.5 pr-4 font-medium text-foreground">{r.kpi_name}</td>
+                                  <td className="py-1.5 pr-4 text-right text-muted-foreground tabular-nums">{r.prior_value ?? '—'}</td>
+                                  <td className="py-1.5 pr-4 text-right tabular-nums"><FlagCell flag={r.flag} value={r.current_value} /></td>
+                                  <td className={`py-1.5 text-right tabular-nums ${r.flag === 'up' ? 'text-emerald-600' : r.flag === 'alert' ? 'text-red-600' : 'text-orange-500'}`}>
+                                    {r.change_pct != null ? `${Number(r.change_pct) > 0 ? '+' : ''}${Number(r.change_pct).toFixed(1)}%` : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    )}
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
         )}

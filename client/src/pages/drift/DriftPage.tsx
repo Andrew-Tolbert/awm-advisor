@@ -9,7 +9,7 @@ import {
   CardTitle,
   Skeleton,
 } from '@databricks/appkit-ui/react';
-import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, ChevronUp, ChevronDown, ChevronsUpDown, MessageSquare } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, ChevronUp, ChevronDown, ChevronsUpDown, MessageSquare, ExternalLink } from 'lucide-react';
 import { useAdvisor } from '../../contexts/AdvisorContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -90,10 +90,25 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function rowBg(status: string, _idx: number, clientGroupEven: boolean) {
-  if (status === 'Over Band') return 'bg-red-50/60';
-  if (status === 'Under Band') return 'bg-amber-50/60';
-  if (status === 'No IPS Target') return 'bg-red-50/30';
+function SeverityBadge({ severity }: { severity: string }) {
+  if (!severity || severity === 'None')
+    return <span className="text-xs text-muted-foreground">—</span>;
+  const styles: Record<string, string> = {
+    Critical: 'bg-red-100 text-red-800 border-red-300',
+    High:     'bg-orange-50 text-orange-700 border-orange-200',
+    Medium:   'bg-amber-50 text-amber-700 border-amber-200',
+    Low:      'bg-slate-50 text-slate-600 border-slate-200',
+  };
+  const cls = styles[severity] ?? 'bg-slate-50 text-slate-600 border-slate-200';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${cls}`}>
+      {severity}
+    </span>
+  );
+}
+
+function rowBg(_status: string, _idx: number, clientGroupEven: boolean, severity?: string) {
+  if (severity === 'Critical') return 'bg-red-50';
   return clientGroupEven ? 'bg-white' : 'bg-slate-50/50';
 }
 
@@ -263,8 +278,11 @@ export function DriftPage() {
         (!assetFilter || r.asset_class === assetFilter) &&
         (!statusFilter || r.drift_status === statusFilter),
     );
+    const severityPriority = (s: string) => s === 'Critical' ? 0 : 1;
     const statusPriority = (s: string) => s === 'Over Band' ? 0 : s === 'Under Band' ? 1 : 2;
     out = [...out].sort((a, b) => {
+      const sevP = severityPriority(a.drift_severity) - severityPriority(b.drift_severity);
+      if (sevP !== 0) return sevP;
       const sp = statusPriority(a.drift_status) - statusPriority(b.drift_status);
       if (sp !== 0) return sp;
       const av = a[sortKey];
@@ -455,13 +473,14 @@ export function DriftPage() {
                     <th className="py-2 pr-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Status
                     </th>
+                    {th('Severity', 'drift_severity')}
                     <th className="py-2 pl-2 w-8" />
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((row, i) => {
                     const groupEven = clientOrder.indexOf(row.client_id) % 2 === 0;
-                    const bg = rowBg(row.drift_status, i, groupEven);
+                    const bg = rowBg(row.drift_status, i, groupEven, row.drift_severity);
                     const prevRow = filtered[i - 1];
                     const showClientName = !prevRow || prevRow.client_id !== row.client_id;
                     const showAccountName = !prevRow ||
@@ -470,8 +489,9 @@ export function DriftPage() {
                     const deltaNeg = row.delta_pct < 0;
                     const rttNeg = row.rebalance_to_target < 0;
 
+                    const isCritical = row.drift_severity === 'Critical';
                     return (
-                      <tr key={`${row.account_id}-${row.asset_class}`} className={`border-b last:border-0 ${bg} transition-colors`}>
+                      <tr key={`${row.account_id}-${row.asset_class}`} className={`border-b last:border-0 ${bg} transition-colors ${isCritical ? 'font-bold' : ''}`}>
                         {/* Client */}
                         <td className="py-1.5 pr-3 font-medium text-foreground whitespace-nowrap max-w-[120px] truncate">
                           {showClientName ? row.client_name : ''}
@@ -481,7 +501,15 @@ export function DriftPage() {
                           {showAccountName ? row.account_name : ''}
                         </td>
                         {/* Asset Class */}
-                        <td className="py-1.5 pr-3 text-foreground whitespace-nowrap">{row.asset_class}</td>
+                        <td className="py-1.5 pr-3 whitespace-nowrap">
+                          <button
+                            onClick={() => navigate(`/documents?asset_class=${encodeURIComponent(row.asset_class)}`)}
+                            className="inline-flex items-center gap-1 text-foreground hover:text-[#1a3a5c] hover:underline transition-colors group"
+                          >
+                            {row.asset_class}
+                            <ExternalLink className="w-2.5 h-2.5 opacity-0 group-hover:opacity-60 transition-opacity" />
+                          </button>
+                        </td>
                         {/* Actual $ */}
                         <td className="py-1.5 pr-3 text-right tabular-nums font-medium">
                           {fmtM(row.actual_dollars)}
@@ -523,6 +551,10 @@ export function DriftPage() {
                         {/* Status */}
                         <td className="py-1.5 pr-3 text-right">
                           <StatusBadge status={row.drift_status} />
+                        </td>
+                        {/* Severity */}
+                        <td className="py-1.5 pr-3 text-right">
+                          <SeverityBadge severity={row.drift_severity} />
                         </td>
                         {/* Action */}
                         <td className="py-1.5 pl-3 text-right">

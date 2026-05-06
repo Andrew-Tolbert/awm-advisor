@@ -17,7 +17,7 @@ interface AdvisorContextValue {
   loading: boolean;
 }
 
-const DEFAULT_ADVISOR_ID = 'ADV001';
+const DEFAULT_ADVISOR_ID = 'ADV009';
 
 const AdvisorContext = createContext<AdvisorContextValue | null>(null);
 

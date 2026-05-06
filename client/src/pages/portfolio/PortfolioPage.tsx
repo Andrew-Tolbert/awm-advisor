@@ -11,7 +11,7 @@ import {
   Skeleton,
   Badge,
 } from '@databricks/appkit-ui/react';
-import { TrendingUp, TrendingDown, AlertCircle, Clock } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { useAdvisor } from '../../contexts/AdvisorContext';
 
 // ── Stat Card ────────────────────────────────────────────────────────────────
@@ -191,52 +191,90 @@ function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
 
 // ── Alerts Feed ──────────────────────────────────────────────────────────────
 
-function AlertsFeed({ onCovenantClick, onDriftClick }: { onCovenantClick: () => void; onDriftClick: () => void }) {
-  const alerts = [
-    {
-      level: 'critical' as const,
-      title: 'Covenant breach risk',
-      body: 'Blackstone PE SC IV — headroom compressed to 0.3x',
-      time: '2 min ago',
-      onClick: onCovenantClick,
-    },
-    {
-      level: 'warning' as const,
-      title: 'Allocation drift',
-      body: 'Private Credit 3% above IPS target for R. Weinstein',
-      time: '14 min ago',
-      onClick: onDriftClick,
-    },
-  ];
+interface AlertItem {
+  level: 'critical' | 'warning' | 'positive';
+  title: string;
+  body: string;
+  onClick: () => void;
+}
+
+const ALERT_COLORS: Record<AlertItem['level'], { icon: string; title: string; border: string; hover: string }> = {
+  critical: { icon: 'text-red-500',     title: 'text-red-700',     border: 'border-red-200',    hover: 'hover:bg-red-50/50' },
+  warning:  { icon: 'text-amber-500',   title: 'text-amber-700',   border: 'border-amber-200',  hover: 'hover:bg-amber-50/50' },
+  positive: { icon: 'text-emerald-500', title: 'text-emerald-700', border: 'border-emerald-200', hover: 'hover:bg-emerald-50/50' },
+};
+
+function AlertCard({ alert }: { alert: AlertItem }) {
+  const c = ALERT_COLORS[alert.level];
+  return (
+    <button
+      onClick={alert.onClick}
+      className={`w-full text-left flex items-start gap-3 p-3 rounded-lg border ${c.border} ${c.hover} transition-colors cursor-pointer`}
+    >
+      <AlertCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${c.icon}`} />
+      <div className="flex-1 min-w-0">
+        <p className={`text-sm font-medium ${c.title}`}>{alert.title}</p>
+        <p className="text-xs text-muted-foreground mt-0.5 leading-snug line-clamp-3" title={alert.body}>
+          {alert.body}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+function AlertsFeed({ signals, drift }: { signals: AlertItem[]; drift: AlertItem[] }) {
+  const empty = signals.length === 0 && drift.length === 0;
+  if (empty) {
+    return <p className="text-sm text-muted-foreground text-center py-6">No active alerts</p>;
+  }
 
   return (
-    <div className="space-y-3">
-      {alerts.map((alert, i) => (
-        <button
-          key={i}
-          onClick={alert.onClick}
-          className="w-full text-left flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
-        >
-          <AlertCircle
-            className={`w-4 h-4 mt-0.5 flex-shrink-0 ${alert.level === 'critical' ? 'text-red-500' : 'text-amber-500'}`}
-          />
-          <div className="flex-1 min-w-0">
-            <p className={`text-sm font-medium ${alert.level === 'critical' ? 'text-red-700' : 'text-amber-700'}`}>
-              {alert.title}
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{alert.body}</p>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground flex-shrink-0">
-            <Clock className="w-3 h-3" />
-            {alert.time}
-          </div>
-        </button>
-      ))}
+    <div className="space-y-2">
+      {signals.map((a, i) => <AlertCard key={i} alert={a} />)}
+
+      {signals.length > 0 && drift.length > 0 && (
+        <div className="flex items-center gap-2 py-1">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            IPS Drift
+          </span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+      )}
+
+      {drift.map((a, i) => <AlertCard key={i} alert={a} />)}
     </div>
   );
 }
 
 // ── Portfolio Page ────────────────────────────────────────────────────────────
+
+interface DriftRow {
+  client_name: string;
+  account_name: string;
+  asset_class: string;
+  delta_pct: number;
+  drift_status: string;
+  drift_severity: string;
+  rebalance_to_band: number;
+}
+
+interface AlertSignalRow {
+  signal_id: string;
+  symbol: string;
+  company_name: string;
+  signal_date: string;
+  source_type: string;
+  source_description: string;
+  sentiment: string;
+  severity_score: number;
+  advisor_action_needed: boolean;
+  signal_type: string;
+  signal: string;
+  signal_value: string;
+  total_exposure: number;
+  rationale: string;
+}
 
 export function PortfolioPage() {
   const navigate = useNavigate();
@@ -244,6 +282,52 @@ export function PortfolioPage() {
 
   const { data: summary, loading: summaryLoading } = useAnalyticsQuery('portfolio_summary', advisorParams);
   const { data: holdings, loading: holdingsLoading } = useAnalyticsQuery('top_holdings', advisorParams);
+  const { data: driftData } = useAnalyticsQuery('account_drift', advisorParams);
+  const { data: allocationData } = useAnalyticsQuery('asset_allocation', advisorParams);
+  const { data: alertsData } = useAnalyticsQuery('alerts', advisorParams);
+
+  const driftAlerts = useMemo<AlertItem[]>(() => {
+    const rows = (driftData ?? []) as unknown as DriftRow[];
+    return rows
+      .filter((r) => r.drift_severity === 'Critical')
+      .map((r) => {
+        const direction = r.delta_pct > 0 ? 'over' : 'under';
+        const absDelta = Math.abs(Number(r.delta_pct)).toFixed(1);
+        const absBand = Math.abs(Number(r.rebalance_to_band));
+        const bandStr = absBand >= 1 ? `$${absBand.toFixed(1)}M` : `$${(absBand * 1000).toFixed(0)}K`;
+        return {
+          level: 'critical' as const,
+          title: `Allocation Drift — ${r.client_name}`,
+          body: `${r.account_name} · ${r.asset_class} is ${absDelta}% ${direction} IPS target · ${bandStr} to resolve`,
+          onClick: () => navigate('/drift'),
+        };
+      });
+  }, [driftData, navigate]);
+
+  const signalAlerts = useMemo<AlertItem[]>(() => {
+    const rows = (alertsData ?? []) as unknown as AlertSignalRow[];
+    const fmtExposure = (v: number) => {
+      const n = Number(v);
+      if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+      if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`;
+      return `$${n.toFixed(0)}`;
+    };
+    return rows.map((r) => {
+      const sentiment = r.sentiment?.toLowerCase() ?? '';
+      const level: AlertItem['level'] =
+        sentiment === 'positive' || sentiment === 'improving'
+          ? 'positive'
+          : Number(r.severity_score) >= 0.8 && r.advisor_action_needed
+          ? 'critical'
+          : 'warning';
+      return {
+        level,
+        title: `${r.company_name} — ${r.signal_type}`,
+        body: `${fmtExposure(r.total_exposure)} exposure · ${r.source_description}`,
+        onClick: () => navigate(`/documents?holding=${r.symbol}`),
+      };
+    });
+  }, [alertsData, navigate]);
 
   const s = summary?.[0] as Record<string, number> | undefined;
 
@@ -309,8 +393,30 @@ export function PortfolioPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Asset Allocation</CardTitle>
           </CardHeader>
-          <CardContent>
-            <DonutChart queryKey="asset_allocation" parameters={advisorParams} />
+          <CardContent className="space-y-3">
+            <DonutChart data={(allocationData ?? []) as Record<string, unknown>[]} />
+            {/* Clickable legend — each chip navigates to Documents filtered by asset class */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {((allocationData ?? []) as Array<{ asset_class: string; pct_of_portfolio: number }>).map((row) => {
+                const acColors: Record<string, string> = {
+                  'Equity':         'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+                  'Fixed Income':   'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100',
+                  'Alternatives':   'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
+                  'Private Credit': 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+                  'Commodities':    'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
+                };
+                const cls = acColors[row.asset_class] ?? 'bg-muted text-muted-foreground border-border hover:bg-muted/80';
+                return (
+                  <button
+                    key={row.asset_class}
+                    onClick={() => navigate(`/documents?asset_class=${encodeURIComponent(row.asset_class)}`)}
+                    className={`text-[10px] px-2 py-0.5 rounded border font-medium transition-colors cursor-pointer ${cls}`}
+                  >
+                    {row.asset_class} · {Number(row.pct_of_portfolio).toFixed(1)}%
+                  </button>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 
@@ -344,10 +450,7 @@ export function PortfolioPage() {
             <CardTitle className="text-sm font-semibold">Active Alerts</CardTitle>
           </CardHeader>
           <CardContent>
-            <AlertsFeed
-              onCovenantClick={() => navigate('/agents')}
-              onDriftClick={() => navigate('/drift')}
-            />
+            <AlertsFeed signals={signalAlerts} drift={driftAlerts} />
           </CardContent>
         </Card>
       </div>
