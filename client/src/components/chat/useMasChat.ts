@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getCachedResponse } from '../../data/prefab-prompts';
+import { getCached, setCached } from '../../lib/answerCache';
 import {
   appendMessage,
   getState,
@@ -7,6 +8,8 @@ import {
   updateLastAssistant,
   useChatStore,
 } from './useChatStore';
+
+const CACHE_SOURCE = 'mas-supervisor';
 
 const CACHE_TOTAL_MS = 600;
 const CACHE_NUM_CHUNKS = 30;
@@ -218,9 +221,10 @@ export function useMasChat() {
     abortRef.current?.abort();
   }
 
-  async function send(content: string) {
+  async function send(content: string, opts?: { forceRefresh?: boolean }) {
     const trimmed = content.trim();
     if (!trimmed || isStreaming) return;
+    const forceRefresh = Boolean(opts?.forceRefresh);
 
     let convId = getState().activeId;
     if (!convId) convId = newConversation();
@@ -230,6 +234,10 @@ export function useMasChat() {
     const snapshot = getState().conversations.find((c) => c.id === convId);
     const messagesForApi = snapshot?.messages ?? [];
 
+    // Only fresh single-turn questions are eligible for any cache layer.
+    // Follow-up turns must always hit the live agent because they depend on context.
+    const isFresh = messagesForApi.length === 1 && messagesForApi[0].role === 'user';
+
     setIsStreaming(true);
     setTraceStatus('Routing through supervisor agent…');
     const controller = new AbortController();
@@ -237,23 +245,38 @@ export function useMasChat() {
 
     appendMessage(convId, { role: 'assistant', content: '' });
 
-    const cached = getCachedResponse(trimmed);
-    if (cached) {
-      try {
-        await streamCachedResponse(convId, cached, controller.signal, setTraceStatus);
-      } finally {
-        setIsStreaming(false);
-        setTraceStatus(null);
-        abortRef.current = null;
+    if (isFresh && !forceRefresh) {
+      // Layer 1: hand-curated prefab cache (chip-click prompts).
+      const prefab = getCachedResponse(trimmed);
+      if (prefab) {
+        try {
+          await streamCachedResponse(convId, prefab, controller.signal, setTraceStatus);
+        } finally {
+          setIsStreaming(false);
+          setTraceStatus(null);
+          abortRef.current = null;
+        }
+        return;
       }
-      return;
+      // Layer 2: per-browser localStorage Q&A bucket.
+      const local = getCached(CACHE_SOURCE, trimmed);
+      if (local) {
+        try {
+          await streamCachedResponse(convId, local, controller.signal, setTraceStatus);
+        } finally {
+          setIsStreaming(false);
+          setTraceStatus(null);
+          abortRef.current = null;
+        }
+        return;
+      }
     }
 
     try {
       const res = await fetch('/api/portfolio-chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: messagesForApi }),
+        body: JSON.stringify({ messages: messagesForApi, force_refresh: forceRefresh }),
         signal: controller.signal,
       });
 
@@ -323,6 +346,10 @@ export function useMasChat() {
       // 3. All streamed deltas (fallback if endpoint never marks final_response)
       const finalText = completedFinalText ?? finalAssembled ?? allAssembled;
       updateLastAssistant(convId, finalText || allAssembled);
+      // Save to localStorage so a future fresh ask of the same question short-circuits.
+      if (isFresh && finalText) {
+        setCached(CACHE_SOURCE, trimmed, finalText);
+      }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error('[advisor-chat]', err);
