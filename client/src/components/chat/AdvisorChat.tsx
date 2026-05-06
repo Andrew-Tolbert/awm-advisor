@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Download, Maximize2, Plus, Send, Sparkles, Square } from 'lucide-react';
+import { Download, Maximize2, Plus, RefreshCw, Send, Sparkles, Square } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
 import { PromptChips } from './PromptChips';
 import { newConversation, useChatStore } from './useChatStore';
@@ -44,6 +44,15 @@ export function AdvisorChat({
   const messages = lastIsStreamingAssistant ? allMessages.slice(0, -1) : allMessages;
   const hasMessages = messages.length > 0;
   const lastMessage = messages[messages.length - 1];
+  // Most-recent user turn — used by the force-refresh button to re-ask the same
+  // question while bypassing both the localStorage and server caches.
+  const lastUserMessage = [...allMessages].reverse().find((m) => m.role === 'user');
+  const canForceRefresh = !isStreaming && Boolean(lastUserMessage?.content);
+
+  function handleForceRefresh() {
+    if (!lastUserMessage || isStreaming) return;
+    void send(lastUserMessage.content, { forceRefresh: true });
+  }
 
   useEffect(() => {
     // Scroll the message container directly so we never bubble up to the document.
@@ -178,6 +187,15 @@ export function AdvisorChat({
             <Sparkles size={12} /> {floatingTitle}
           </div>
           <div className="flex items-center gap-0.5 text-muted-foreground">
+            {canForceRefresh && (
+              <button
+                onClick={handleForceRefresh}
+                className="p-1 rounded hover:bg-muted hover:text-foreground"
+                title="Regenerate (bypass cache)"
+              >
+                <RefreshCw size={12} />
+              </button>
+            )}
             <button
               onClick={() => newConversation()}
               className="p-1 rounded hover:bg-muted hover:text-foreground"
@@ -219,16 +237,28 @@ export function AdvisorChat({
           <div className="text-sm font-medium text-foreground truncate" title={activeConversation.title}>
             {activeConversation.title}
           </div>
-          {onExport && (
-            <button
-              onClick={() => onExport(activeConversation)}
-              className="flex items-center gap-1.5 text-xs text-[#0E1928] hover:text-[#1a2a3e] border border-[#0E1928]/20 hover:border-[#0E1928]/40 rounded-md px-2.5 py-1 transition-colors"
-              title="Export conversation as PDF"
-            >
-              <Download size={12} />
-              Export PDF
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {canForceRefresh && (
+              <button
+                onClick={handleForceRefresh}
+                className="flex items-center gap-1.5 text-xs text-[#0E1928] hover:text-[#1a2a3e] border border-[#0E1928]/20 hover:border-[#0E1928]/40 rounded-md px-2.5 py-1 transition-colors"
+                title="Regenerate the last response, bypassing the cache"
+              >
+                <RefreshCw size={12} />
+                Regenerate
+              </button>
+            )}
+            {onExport && (
+              <button
+                onClick={() => onExport(activeConversation)}
+                className="flex items-center gap-1.5 text-xs text-[#0E1928] hover:text-[#1a2a3e] border border-[#0E1928]/20 hover:border-[#0E1928]/40 rounded-md px-2.5 py-1 transition-colors"
+                title="Export conversation as PDF"
+              >
+                <Download size={12} />
+                Export PDF
+              </button>
+            )}
+          </div>
         </div>
       )}
       <div className="flex-1 min-h-0 flex flex-col px-6">
