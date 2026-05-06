@@ -53,12 +53,13 @@
 - [x] `concentration_risk.sql`
 - [x] `advisors.sql` — new; populates sidebar advisor picker
 - [x] `holdings_list.sql`
-- [x] `document_insights.sql` (parameterized by `:holding_id`)
-- [x] `management_tone.sql` (parameterized by `:holding_id`) — mock CTE, needs real data migration
-- [x] `source_citations.sql` (parameterized by `:holding_id`) — mock CTE, needs real data migration
-- [ ] `drift_summary.sql` — advisor-level summary: total drifting accounts, clients at risk, worst asset class
-- [ ] `client_drift.sql` — one row per client for this advisor; `client_drift_score`, `client_breach_count`, worst asset class; parameterized by `:advisor_id`
-- [ ] `account_drift.sql` — per-account, per-asset-class detail with full dollar columns; parameterized by `:advisor_id` + optional `:client_id`
+- [x] ~~`document_insights.sql`~~ — superseded by `company_fundamentals.sql`
+- [x] `company_fundamentals.sql` — **NEW.** Live against `gold_app_company_fundamentals`; 10 KPIs per holding; card only renders when holding selected; change% color driven by `flag` not raw sign
+- [x] `management_tone.sql` — ✅ Live against `gold_app_management_tone`
+- [x] `source_citations.sql` — ☐ Still mock CTE; needs migration to `vs_sec_filings` + `vs_signals`
+- [x] `account_drift.sql` — ✅ Live against `gold_account_ips_drift`; all dollar + drift columns
+- [ ] `drift_summary.sql` — currently computed client-side in DriftPage; could move to SQL for perf
+- [ ] `client_drift.sql` — currently computed client-side in DriftPage; could move to SQL for perf
 
 #### Gold App Tables — `ahtsa.awm`
 
@@ -71,6 +72,7 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 | `gold_app_performance_timeseries` | `silver_advisor_daily_returns` | All trading days (daily); no month-end aggregation |
 | `gold_app_top_holdings` | `holdings`, `bronze_historical_prices`, `gold_unified_signals`, `bronze_company_profiles` | Top-10 per advisor; risk_flag from last-30-day signals |
 | `gold_app_concentration_risk` | `gold_ips_drift`, `clients` | Top-5 clients by AUM per advisor — kept for Portfolio heatmap; Drift page uses account_drift |
+| `gold_app_company_fundamentals` ✅ | `gold_financial_fundamentals` + `holdings` | **NEW.** 10 KPI rows per holding (EBITDA, Leverage, RevGrowth, IntCoverage, ND/EBITDA, EPS, EBITDA Margin, Net Margin, ROE, FCF). Prior vs current period, formatted display strings, flag ('up'/'down'/'alert'), `LATERAL VIEW INLINE` unpivot. All holdings in portfolio; is_etf=false. |
 
 **New tables needed for Drift Analysis page:**
 
@@ -129,15 +131,16 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 | `asset_allocation.sql` | Portfolio — Asset Allocation donut chart | ✅ Live — queries `gold_app_asset_allocation WHERE advisor_id = :advisor_id` |
 | `performance_timeseries.sql` | Portfolio — Performance vs Benchmark (daily) | ✅ Live — queries `gold_app_performance_timeseries WHERE advisor_id = :advisor_id` |
 | `top_holdings.sql` | Portfolio — Top 10 Holdings table | ✅ Live — queries `gold_app_top_holdings WHERE advisor_id = :advisor_id` |
-| `concentration_risk.sql` | Portfolio — Client Concentration Risk heatmap | ✅ Live — queries `gold_app_concentration_risk WHERE advisor_id = :advisor_id` |
+| `concentration_risk.sql` | Portfolio — Drift heatmap (asset class × risk profile) | ✅ Live — queries `gold_account_ips_drift`, weighted avg `drift_from_target_pct` by account value |
 | `advisors.sql` | Sidebar — advisor picker dropdown | ✅ Live — queries `ahtsa.awm.advisors ORDER BY rank_order` |
 | `holdings_list.sql` | Documents — left-panel holdings selector | ✅ Live — queries `gold_app_holdings_list WHERE advisor_id = :advisor_id` |
-| `document_insights.sql` | Documents — KPI delta table (`:holding_id` param) | ☐ Still mock CTE |
-| `management_tone.sql` | Documents — Management Tone bar | ✅ Live — queries `gold_app_management_tone WHERE holding_id = :holding_id` |
+| `company_fundamentals.sql` | Documents — Key Metrics KPI table (`:holding_id` param) | ✅ Live — queries `gold_app_company_fundamentals WHERE symbol = :holding_id`; card hidden until holding selected; flag drives color (not raw sign) |
+| `document_insights.sql` | ~~Documents — KPI delta table~~ | ⛔ Superseded by `company_fundamentals.sql`. Still in repo but no longer wired to any component. |
+| `management_tone.sql` | Documents — Management Tone bar | ✅ Live — queries `gold_app_management_tone`; all holdings loaded, filtered client-side by `holding_id` |
 | `source_citations.sql` | Documents — Source Citations | ☐ Mock CTE → real source: `vs_sec_filings` + `vs_signals` (chunk text + page refs) |
-| `drift_summary.sql` | Drift — advisor KPI bar | ☐ Needs `gold_app_drift_summary` (aggregates from `gold_app_account_drift`) |
-| `client_drift.sql` | Drift — client table | ☐ Needs `gold_app_client_drift` (aggregates from `gold_app_account_drift`) |
-| `account_drift.sql` | Drift — account + asset class drill-down | ☐ Needs `gold_app_account_drift` — full dollar columns: actual/target/min/max dollars, rebalance_to_band, rebalance_to_target |
+| `account_drift.sql` | Drift — full account + asset class detail table | ✅ Live — queries `gold_account_ips_drift WHERE advisor_id = :advisor_id`; all dollar columns, band/target rebalance amounts, drift_status, risk_profile |
+| `drift_summary.sql` | Drift — advisor KPI bar (4 stat cards) | ☐ Not yet created — computed live in `DriftPage.tsx` from `account_drift` rows client-side |
+| `client_drift.sql` | Drift — client-level breach table | ☐ Not yet created — computed live in `DriftPage.tsx` from `account_drift` rows client-side |
 
 ### Phase 2.5: Advisor Context & Filtering
 - [x] `ahtsa.awm.advisors` table exists with `advisor_id`, `full_name`, `title`, `email`, `rank_order`, initials derivable from `first_name`/`last_name`
@@ -731,10 +734,11 @@ config/queries/
   top_holdings.sql                           ← live
   concentration_risk.sql                     ← live
   holdings_list.sql                          ← live
-  document_insights.sql                      ← mock CTE (needs migration)
-  drift_summary.sql                          ← new (needs gold_app_drift_summary)
-  client_drift.sql                           ← new (needs gold_app_client_drift)
-  account_drift.sql                          ← new (needs gold_app_account_drift)
+  document_insights.sql                      ← superseded (no longer wired)
+  company_fundamentals.sql                   ← live ✅ (gold_app_company_fundamentals)
+  account_drift.sql                          ← live ✅ (gold_account_ips_drift)
+  drift_summary.sql                          ← computed client-side for now
+  client_drift.sql                           ← computed client-side for now
 
 server/
   server.ts                                  ← add agent_runs + client_comms table creation

@@ -87,6 +87,33 @@ declare module "@databricks/appkit-ui/react" {
           pct_of_portfolio: number;
         }>;
       };
+    company_fundamentals: {
+        name: "company_fundamentals";
+        parameters: {
+          /** STRING - use sql.string() */
+          holding_id: SQLStringMarker;
+        };
+        result: Array<{
+          /** @sqlType INT */
+          sort_order: number;
+          /** @sqlType STRING */
+          kpi_name: string;
+          /** @sqlType STRING */
+          prior_value: string;
+          /** @sqlType STRING */
+          current_value: string;
+          /** @sqlType DOUBLE */
+          change_pct: number;
+          /** @sqlType STRING */
+          flag: string;
+          /** @sqlType DECIMAL(1,1) */
+          covenant_value: number;
+          /** @sqlType STRING */
+          prior_period: string;
+          /** @sqlType STRING */
+          current_period: string;
+        }>;
+      };
     concentration_risk: {
         name: "concentration_risk";
         parameters: {
