@@ -13,7 +13,6 @@ interface HoldingItem {
   asset_class: string;
   strategy: string;
   aum_millions: number;
-  risk_flag: string; // 'alert' | 'watch' | 'none'
 }
 
 interface InsightRow {
@@ -445,11 +444,7 @@ export function DocumentsPage() {
                     selectedId === h.holding_id ? 'bg-muted border-l-[3px] border-l-[#1a3a5c] pl-[13px]' : ''
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-medium text-foreground leading-snug line-clamp-1">{h.name}</p>
-                    {h.risk_flag === 'alert' && <span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />}
-                    {h.risk_flag === 'watch' && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />}
-                  </div>
+                  <p className="text-xs font-medium text-foreground leading-snug line-clamp-1">{h.name}</p>
                   <div className="mt-1 flex items-center gap-1 flex-wrap">
                     <AssetClassBadge cls={h.asset_class} />
                     <StrategyBadge strategy={h.strategy} />

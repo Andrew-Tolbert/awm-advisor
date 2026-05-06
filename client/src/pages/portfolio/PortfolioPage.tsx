@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
   Skeleton,
-  Badge,
 } from '@databricks/appkit-ui/react';
 import { TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { useAdvisor } from '../../contexts/AdvisorContext';
@@ -61,13 +60,6 @@ interface Holding {
   aum_millions: number;
   pct_of_portfolio: number;
   ytd_return: number;
-  risk_flag: string;
-}
-
-function RiskBadge({ flag }: { flag: string }) {
-  if (flag === 'alert') return <Badge variant="destructive" className="text-xs py-0">Alert</Badge>;
-  if (flag === 'watch') return <Badge className="text-xs py-0 bg-amber-100 text-amber-800 border-amber-200 hover:bg-amber-100">Watch</Badge>;
-  return <span className="text-muted-foreground text-sm">—</span>;
 }
 
 interface HoldingsTableProps {
@@ -79,7 +71,6 @@ interface HoldingsTableProps {
 function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
   const [nameFilter, setNameFilter] = useState('');
   const [assetClassFilter, setAssetClassFilter] = useState('');
-  const [riskFilter, setRiskFilter] = useState('');
 
   const assetClasses = useMemo(
     () => [...new Set((data ?? []).map((h) => h.asset_class))].sort(),
@@ -92,10 +83,9 @@ function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
     return rows.filter(
       (h) =>
         (!name || h.name.toLowerCase().includes(name)) &&
-        (!assetClassFilter || h.asset_class === assetClassFilter) &&
-        (!riskFilter || h.risk_flag === riskFilter),
+        (!assetClassFilter || h.asset_class === assetClassFilter),
     );
-  }, [data, nameFilter, assetClassFilter, riskFilter]);
+  }, [data, nameFilter, assetClassFilter]);
 
   if (loading) {
     return (
@@ -130,16 +120,6 @@ function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
           <option value="">All classes</option>
           {assetClasses.map((ac) => <option key={ac} value={ac}>{ac}</option>)}
         </select>
-        <select
-          value={riskFilter}
-          onChange={(e) => setRiskFilter(e.target.value)}
-          className="h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="">All risk</option>
-          <option value="alert">Alert</option>
-          <option value="watch">Watch</option>
-          <option value="none">None</option>
-        </select>
         <span className="text-xs text-muted-foreground ml-auto">
           {filtered.length}{filtered.length !== data.length ? ` of ${data.length}` : ''} holdings
         </span>
@@ -155,7 +135,6 @@ function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
               <th className="text-right py-2 pr-4 font-medium">AUM ($M)</th>
               <th className="text-right py-2 pr-4 font-medium">% Portfolio</th>
               <th className="text-right py-2 pr-4 font-medium">YTD Return</th>
-              <th className="text-center py-2 font-medium">Risk</th>
             </tr>
           </thead>
           <tbody>
@@ -172,14 +151,11 @@ function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
                 <td className={`py-2.5 pr-4 text-right tabular-nums ${Number(h.ytd_return) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                   {Number(h.ytd_return) >= 0 ? '+' : ''}{Number(h.ytd_return).toFixed(1)}%
                 </td>
-                <td className="py-2.5 text-center">
-                  <RiskBadge flag={h.risk_flag} />
-                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-sm text-muted-foreground">No holdings match filters</td>
+                <td colSpan={5} className="py-6 text-center text-sm text-muted-foreground">No holdings match filters</td>
               </tr>
             )}
           </tbody>

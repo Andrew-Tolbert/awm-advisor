@@ -310,7 +310,8 @@ export function DriftPage() {
     </th>
   );
 
-  const breachCount = filtered.filter((r) => r.drift_status !== 'Within Band').length;
+  const criticalCount    = filtered.filter((r) => r.drift_severity === 'Critical').length;
+  const approachingCount = filtered.filter((r) => r.drift_status !== 'Within Band' && r.drift_severity !== 'Critical').length;
 
   return (
     <div className="space-y-5 max-w-[1400px]">
@@ -394,8 +395,11 @@ export function DriftPage() {
               {!loading && (
                 <span className="ml-2 text-xs font-normal text-muted-foreground">
                   {filtered.length} rows
-                  {breachCount > 0 && (
-                    <span className="ml-1 text-red-600 font-medium">· {breachCount} breaches</span>
+                  {criticalCount > 0 && (
+                    <span className="ml-1 text-red-600 font-medium">· {criticalCount} critical</span>
+                  )}
+                  {approachingCount > 0 && (
+                    <span className="ml-1 text-amber-600 font-medium">· {approachingCount} approaching breach</span>
                   )}
                 </span>
               )}

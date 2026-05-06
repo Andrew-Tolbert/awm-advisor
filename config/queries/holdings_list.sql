@@ -1,5 +1,5 @@
 -- @param advisor_id STRING
-SELECT holding_id, name, asset_class, strategy, aum_millions, risk_flag
+SELECT holding_id, name, asset_class, strategy, aum_millions
 FROM ahtsa.awm.gold_app_holdings_list
 WHERE advisor_id = :advisor_id
 ORDER BY

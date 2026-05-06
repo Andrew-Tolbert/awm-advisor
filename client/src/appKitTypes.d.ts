@@ -215,8 +215,6 @@ declare module "@databricks/appkit-ui/react" {
           strategy: string;
           /** @sqlType DOUBLE */
           aum_millions: number;
-          /** @sqlType STRING */
-          risk_flag: string;
         }>;
       };
     management_tone: {
