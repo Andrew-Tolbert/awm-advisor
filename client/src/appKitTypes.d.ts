@@ -124,6 +124,31 @@ declare module "@databricks/appkit-ui/react" {
           pct_of_portfolio: number;
         }>;
       };
+    client_communications: {
+        name: "client_communications";
+        parameters: {
+          /** STRING - use sql.string() */
+          advisor_id: SQLStringMarker;
+          /** STRING - use sql.string() */
+          signal_id: SQLStringMarker;
+        };
+        result: Array<{
+          /** @sqlType STRING */
+          client_id: string;
+          /** @sqlType STRING */
+          client_name: string;
+          /** @sqlType DOUBLE */
+          aum_millions: number;
+          /** @sqlType STRING */
+          signal_type: string;
+          /** @sqlType STRING */
+          symbol: string;
+          /** @sqlType STRING */
+          signal_id: string;
+          /** @sqlType STRING */
+          email_draft: string;
+        }>;
+      };
     company_fundamentals: {
         name: "company_fundamentals";
         parameters: {
@@ -164,38 +189,6 @@ declare module "@databricks/appkit-ui/react" {
           risk_profile: string;
           /** @sqlType DOUBLE */
           delta_pct: number;
-        }>;
-      };
-    document_insights: {
-        name: "document_insights";
-        parameters: {
-          /** any - use sql.*() */
-          holding_id: SQLTypeMarker;
-        };
-        result: Array<{
-          /** @sqlType STRING */
-          kpi_name: string;
-          /** @sqlType STRING */
-          prior_value: string;
-          /** @sqlType STRING */
-          current_value: string;
-          /** @sqlType DECIMAL(3,1) */
-          change_pct: number;
-          /** @sqlType STRING */
-          flag: string;
-          /** @sqlType DECIMAL(1,1) */
-          covenant_value: number;
-        }>;
-      };
-    hello_world: {
-        name: "hello_world";
-        parameters: {
-          /** any - use sql.*() */
-          message: SQLTypeMarker;
-        };
-        result: Array<{
-          /** @sqlType STRING */
-          value: string;
         }>;
       };
     holdings_list: {
@@ -338,8 +331,6 @@ declare module "@databricks/appkit-ui/react" {
           pct_of_portfolio: number;
           /** @sqlType DOUBLE */
           ytd_return: number;
-          /** @sqlType STRING */
-          risk_flag: string;
         }>;
       };
   }

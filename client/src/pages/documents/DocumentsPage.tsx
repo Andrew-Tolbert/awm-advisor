@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useSearchParams } from 'react-router';
+import { useSearchParams, useNavigate } from 'react-router';
 import { useAnalyticsQuery, Card, CardContent, Skeleton } from '@databricks/appkit-ui/react';
 import { sql } from '@databricks/appkit-ui/js';
-import { AlertTriangle, AlertCircle, FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertTriangle, AlertCircle, FileText, ChevronDown, ChevronUp, MessageSquare } from 'lucide-react';
 import { useAdvisor } from '../../contexts/AdvisorContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -143,7 +143,7 @@ const BANNER_COLORS = {
   },
 };
 
-function AlertBanner({ alert }: { alert: AlertSignalRow }) {
+function AlertBanner({ alert, onDraftComms }: { alert: AlertSignalRow; onDraftComms: () => void }) {
   const [expanded, setExpanded] = useState(false);
 
   const sentiment = alert.sentiment?.toLowerCase() ?? '';
@@ -167,7 +167,7 @@ function AlertBanner({ alert }: { alert: AlertSignalRow }) {
       <div className="flex items-start gap-2.5 p-3">
         <AlertCircle className={`w-4 h-4 mt-0.5 flex-shrink-0 ${c.icon}`} />
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <p className={`text-xs font-semibold ${c.title}`}>
                 {alert.signal_type}
@@ -176,13 +176,23 @@ function AlertBanner({ alert }: { alert: AlertSignalRow }) {
                 {fmtExposure(alert.total_exposure)} exposure · {alert.source_description}
               </p>
             </div>
-            <button
-              onClick={() => setExpanded((e) => !e)}
-              className={`flex-shrink-0 flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors ${c.btn}`}
-            >
-              {expanded ? 'Collapse' : 'View Analysis'}
-              {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button
+                onClick={() => setExpanded((e) => !e)}
+                className={`flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors ${c.btn}`}
+              >
+                {expanded ? 'Collapse' : 'View Analysis'}
+                {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+              <button
+                onClick={onDraftComms}
+                title="Draft client communication"
+                className={`flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border transition-colors ${c.btn}`}
+              >
+                <MessageSquare className="w-3 h-3" />
+                Draft Comms
+              </button>
+            </div>
           </div>
 
           {expanded && (
@@ -309,6 +319,7 @@ function ManagementTonePanel({ rows, loading, error }: { rows: ToneRow[]; loadin
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function DocumentsPage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string>(searchParams.get('holding') ?? '');
   const [assetClassFilter, setAssetClassFilter] = useState<string>(searchParams.get('asset_class') ?? '');
@@ -501,7 +512,12 @@ export function DocumentsPage() {
         </div>
 
         {/* Alert banner — shown when this holding has a curated signal */}
-        {selectedAlert && <AlertBanner alert={selectedAlert} />}
+        {selectedAlert && (
+          <AlertBanner
+            alert={selectedAlert}
+            onDraftComms={() => navigate(`/agents?signal_id=${encodeURIComponent(selectedAlert.signal_id)}`)}
+          />
+        )}
 
         {/* KPI Delta Table — only when a holding is selected and data exists */}
         {selectedId && (insightsLoading || rows.length > 0) && (

@@ -599,7 +599,7 @@ export function DriftPage() {
                             </button>
                             {(row.drift_status === 'Over Band' || row.drift_status === 'Under Band') && (
                               <button
-                                onClick={() => navigate('/agents', { state: { trigger: 'ips_drift', row } })}
+                                onClick={() => navigate(`/agents?signal_id=${encodeURIComponent(row.account_id)}`, { state: { trigger: 'ips_drift', row } })}
                                 className="p-1 rounded text-[#1a3a5c] hover:bg-[#1a3a5c]/10 transition-colors"
                                 title="Draft client communications"
                               >

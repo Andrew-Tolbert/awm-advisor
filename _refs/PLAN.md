@@ -10,22 +10,21 @@
 
 ### Wireframe
 - [x] Sidebar navigation — GS identity, 4 nav links, active left-border style, advisor picker dropdown
-- [ ] **Sidebar updated to 5 nav links** — add Drift Analysis as second item
+- [x] **Sidebar updated to 5 nav links** — add Drift Analysis as second item
 - [x] Page 1: Portfolio Intelligence Dashboard
   - [x] 4 KPI stat cards (AUM, Perf vs Benchmark, Allocation Drift, Clients at Risk)
-  - [ ] Allocation Drift KPI card links to `/drift` instead of being static
-  - [ ] Drift alert in Active Alerts feed links to `/drift` (was `/documents`)
+  - [x] Allocation Drift KPI card links to `/drift` instead of being static
+  - [x] Drift alert in Active Alerts feed links to `/drift` (was `/documents`)
   - [x] Asset Allocation donut chart (`asset_allocation.sql`)
   - [x] Performance vs Benchmark area chart (`performance_timeseries.sql`)
   - [x] Top 10 Holdings table with risk badges, clickable rows → `/documents`
   - [x] Active Alerts feed — covenant alert → `/agents`, drift alert → `/drift`
   - [x] Client Concentration Risk heatmap (`concentration_risk.sql`)
-- [ ] Page 2: Drift Analysis (`/drift`) — **NEW**
-  - [ ] Advisor-level summary bar: total accounts drifting, total clients at risk, worst asset class
-  - [ ] Client drift table — one row per client, sorted by `client_drift_score` desc; columns: client name, AUM, # breaches, worst asset class, drift score badge
-  - [ ] Account drill-down panel — clicking a client expands or navigates to show per-account, per-asset-class drift rows with IPS band (min/target/max) and actual vs target delta
-  - [ ] Asset class drift heatmap — rows = asset classes, columns = Over / Within / Under Band counts across all accounts for this advisor
-  - [ ] URL param sync (`?client=<id>`) to deep-link from Portfolio page alerts
+- [x] Page 2: Drift Analysis (`/drift`) — **BUILT**
+  - [x] Advisor-level summary bar: total accounts drifting, total clients at risk, worst asset class
+  - [x] Client drift table — one row per client, sorted by drift score; columns: client name, AUM, # breaches, worst asset class, drift score badge
+  - [x] Account drill-down panel — clicking a client expands per-account, per-asset-class drift rows with IPS band and actual vs target delta
+  - [x] URL param sync (`?client=<id>`) to deep-link from Portfolio page alerts
 - [x] Page 3: Document Intelligence
   - [x] Left panel: holdings list with asset-class badges and alert dot
   - [x] Left panel: document list (10-K, Earnings, CIM, Covenant)
@@ -53,13 +52,15 @@
 - [x] `concentration_risk.sql`
 - [x] `advisors.sql` — new; populates sidebar advisor picker
 - [x] `holdings_list.sql`
-- [x] ~~`document_insights.sql`~~ — superseded by `company_fundamentals.sql`
-- [x] `company_fundamentals.sql` — **NEW.** Live against `gold_app_company_fundamentals`; 10 KPIs per holding; card only renders when holding selected; change% color driven by `flag` not raw sign
-- [x] `management_tone.sql` — ✅ Live against `gold_app_management_tone`
-- [x] `source_citations.sql` — ☐ Still mock CTE; needs migration to `vs_sec_filings` + `vs_signals`
-- [x] `account_drift.sql` — ✅ Live against `gold_account_ips_drift`; all dollar + drift columns
-- [ ] `drift_summary.sql` — currently computed client-side in DriftPage; could move to SQL for perf
-- [ ] `client_drift.sql` — currently computed client-side in DriftPage; could move to SQL for perf
+- [x] ~~`document_insights.sql`~~ — **deleted**; superseded by `company_fundamentals.sql`
+- [x] ~~`hello_world.sql`~~ — **deleted**; unused scaffold
+- [x] `company_fundamentals.sql` — Live against `gold_app_company_fundamentals`; 10 KPIs per holding; card only renders when holding selected; flag drives color
+- [x] `management_tone.sql` — Live against `gold_app_management_tone`
+- [x] `source_citations.sql` — Still mock CTE; real source migration (`vs_sec_filings` + `vs_signals`) not needed for demo
+- [x] `account_drift.sql` — Live against `gold_account_ips_drift`; all dollar + drift columns
+- [ ] `drift_summary.sql` — computed client-side in DriftPage
+- [ ] `client_drift.sql` — computed client-side in DriftPage
+- [x] `client_communications.sql` — **NEW.** Live against `ahtsa.awm.app_client_communications`; filtered by `advisor_id` + `signal_id`; joins `clients` for AUM; powers Agent Orchestration page
 
 #### Gold App Tables — `ahtsa.awm`
 
@@ -135,35 +136,44 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 | `advisors.sql` | Sidebar — advisor picker dropdown | ✅ Live — queries `ahtsa.awm.advisors ORDER BY rank_order` |
 | `holdings_list.sql` | Documents — left-panel holdings selector | ✅ Live — queries `gold_app_holdings_list WHERE advisor_id = :advisor_id` |
 | `company_fundamentals.sql` | Documents — Key Metrics KPI table (`:holding_id` param) | ✅ Live — queries `gold_app_company_fundamentals WHERE symbol = :holding_id`; card hidden until holding selected; flag drives color (not raw sign) |
-| `document_insights.sql` | ~~Documents — KPI delta table~~ | ⛔ Superseded by `company_fundamentals.sql`. Still in repo but no longer wired to any component. |
-| `management_tone.sql` | Documents — Management Tone bar | ✅ Live — queries `gold_app_management_tone`; all holdings loaded, filtered client-side by `holding_id` |
-| `source_citations.sql` | Documents — Source Citations | ☐ Mock CTE → real source: `vs_sec_filings` + `vs_signals` (chunk text + page refs) |
-| `account_drift.sql` | Drift — full account + asset class detail table | ✅ Live — queries `gold_account_ips_drift WHERE advisor_id = :advisor_id`; all dollar columns, band/target rebalance amounts, drift_status, risk_profile |
-| `drift_summary.sql` | Drift — advisor KPI bar (4 stat cards) | ☐ Not yet created — computed live in `DriftPage.tsx` from `account_drift` rows client-side |
-| `client_drift.sql` | Drift — client-level breach table | ☐ Not yet created — computed live in `DriftPage.tsx` from `account_drift` rows client-side |
+| ~~`document_insights.sql`~~ | ~~Documents — KPI delta table~~ | ⛔ Deleted — superseded by `company_fundamentals.sql` |
+| `management_tone.sql` | Documents — Management Tone bar | ✅ Live — queries `gold_app_management_tone`; filtered client-side by `holding_id` |
+| `source_citations.sql` | Documents — Source Citations | ✅ Mock CTE — sufficient for demo |
+| `account_drift.sql` | Drift — full account + asset class detail table | ✅ Live — queries `gold_account_ips_drift WHERE advisor_id = :advisor_id` |
+| `drift_summary.sql` | Drift — advisor KPI bar | ☐ Computed client-side in `DriftPage.tsx` |
+| `client_drift.sql` | Drift — client-level breach table | ☐ Computed client-side in `DriftPage.tsx` |
+| `client_communications.sql` | Agents — affected clients + draft emails | ✅ Live — `ahtsa.awm.app_client_communications`; filtered by `advisor_id` + `signal_id`; joins `clients` for AUM |
 
 ### Phase 2.5: Advisor Context & Filtering
 - [x] `ahtsa.awm.advisors` table exists with `advisor_id`, `full_name`, `title`, `email`, `rank_order`, initials derivable from `first_name`/`last_name`
 - [x] `AdvisorContext.tsx` — fetches all advisors, holds selected `advisor_id` in state, exposes `params` object and `setAdvisorId`
 - [x] Sidebar `AdvisorPicker` — `<select>` dropdown populated from `advisors` query; switching advisor re-runs all queries instantly
 - [x] `PortfolioPage` wired to `useAdvisor()` — zero hardcoded advisor IDs in component code
-- [ ] Wire `useAdvisor()` into `DocumentsPage` (holdings_list and management_tone are live; document_insights and source_citations still mock)
-- [ ] Wire `useAdvisor()` into `DriftPage` for all three drift queries
+- [x] Wire `useAdvisor()` into `DocumentsPage` (holdings_list and management_tone live; source_citations mock is fine for demo)
+- [x] Wire `useAdvisor()` into `DriftPage`
+- [x] Wire `useAdvisor()` into `AgentsPage` — `useAnalyticsQuery('client_communications', { advisor_id, signal_id })`
 
-### Phase 3: Backend & Lakebase
-- [ ] `server/routes/agents/agent-routes.ts` — `GET /api/agents/cascade`, `POST /api/agents/approve`
-- [ ] Lakebase `app.agent_runs` table creation on server startup
-- [ ] Lakebase `app.client_communications` table creation on server startup
-- [ ] Seed one pending agent run on first boot
-- [ ] Wire approve/dismiss to actual Lakebase writes
+### Phase 3: Agent Orchestration — Real Data Wiring
+- [x] **`AgentsPage.tsx`** — wired to `ahtsa.awm.app_client_communications`; real clients, real AI-drafted emails (markdown rendered via `marked`); dynamic cascade narrative per signal type; `?signal_id=` URL param drives which alert is shown; empty state when no signal selected
+- [x] **`client_communications.sql`** — parameterized by `advisor_id` + `signal_id`; joins `clients` for AUM; latest `run_date` via scalar subquery
+- [x] **Document Intelligence alert banners** — "Draft Comms" button navigates to `/agents?signal_id=<id>`
+- [x] **Markdown rendering** — `marked` parses email drafts; toggle between rendered preview and raw edit (`Pencil`/`Eye`)
+- [ ] Lakebase approval write — Approve & Send shows success state client-side only; no backend write yet (not needed for demo)
 
-### Phase 4: Polish
-- [ ] GS color palette CSS variables (`#1a3a5c`, alert red, amber, green)
-- [ ] Loading skeletons on all data-driven sections
-- [ ] Error states on all `useAnalyticsQuery` calls
-- [ ] Empty states (0 holdings, 0 alerts)
-- [ ] Nav active style refinement
-- [ ] Responsive sidebar (icon-only on < 1024px) — optional
+### Phase 4: Polish ✅ (demo-ready)
+- [x] GS navy `#1a3a5c` used consistently for accents, borders, and interactive elements
+- [x] Loading states on data-driven sections (`commsLoading` guard in AgentsPage; `Skeleton` in DocumentsPage)
+- [x] Empty state on Agent Orchestration when no `signal_id` in URL
+- [ ] Loading skeletons on Portfolio KPI cards
+- [ ] Error states on `useAnalyticsQuery` calls
+- [ ] Responsive sidebar (icon-only < 1024px) — optional, not needed for demo
+
+### Pre-commit Cleanup ✅
+- [x] Deleted `document_insights.sql` and `hello_world.sql` (unused)
+- [x] Removed `document_insights` and `hello_world` from `appKitTypes.d.ts`
+- [x] Removed `risk_flag` from `top_holdings.sql` SELECT and `appKitTypes.d.ts` result type
+- [x] Stripped commented-out CSS blocks from `index.css`
+- [x] TypeScript clean — `npx tsc --noEmit` passes with zero errors
 
 ---
 

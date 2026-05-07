@@ -1,68 +1,157 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router';
-import { Card, CardContent, Badge } from '@databricks/appkit-ui/react';
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, CheckCheck } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router';
+import { useAnalyticsQuery, Card, CardContent, Badge } from '@databricks/appkit-ui/react';
+import { sql } from '@databricks/appkit-ui/js';
+import { marked } from 'marked';
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, CheckCheck, Pencil, Eye, MessageSquare } from 'lucide-react';
+import { useAdvisor } from '../../contexts/AdvisorContext';
 
-// ── Hard-coded cascade data (wireframe) ───────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const CASCADE = {
-  holding_name: 'Blackstone PE Strategic Capital IV',
-  triggered_at: 'Nov 4, 2025 · 6:47 AM',
-  trigger: 'Covenant headroom compressed: 0.7x → 0.3x (Q3 2025 10-K)',
-  agents: [
-    {
-      id: 1,
-      name: 'Research Agent',
-      summary: 'Detected covenant compression in Q3 10-K filing.',
-      detail: 'Parsed 248-page 10-K filing (filed Oct 31, 2025). Identified covenant headroom metric on p.47: compressed from 0.7x to 0.3x against a 1.0x minimum threshold. Cross-referenced Q3 earnings transcript — management tone shifted cautious. Flagged interest coverage at 2.4x, approaching 2.0x floor.',
-    },
-    {
-      id: 2,
-      name: 'Portfolio Construction Agent',
-      summary: 'Found 3 client accounts with exposure — $101M total.',
-      detail: 'Scanned all 47 UHNW/HNW client portfolios. Identified 3 accounts with Blackstone PE SC IV positions: R. Weinstein ($48M, 18.2% of PC allocation), S. Chen ($31M, 14.7%), J. Park ($22M, 11.4%). All 3 exceed their IPS private credit target. Combined exposure: $101M.',
-    },
-    {
-      id: 3,
-      name: 'Client Personalization Agent',
-      summary: 'Drafted 3 personalized communications in advisor tone.',
-      detail: 'Generated individualized outreach for each affected client using 6 months of prior advisor–client email history to match tone and style. Each draft references the client\'s specific allocation, IPS target, and a proposed re-allocation scenario. Drafts flagged for advisor review before send.',
-    },
-  ],
-  affected_clients: [
-    { name: 'Robert Weinstein', aum_millions: 48, tier: 'UHNW' },
-    { name: 'Sarah Chen',       aum_millions: 31, tier: 'UHNW' },
-    { name: 'James Park',       aum_millions: 22, tier: 'HNW'  },
-  ],
-  draft_templates: [
-    `Dear Robert,\n\nI wanted to proactively reach out regarding your position in Blackstone PE Strategic Capital IV. Our analysis of their recently filed Q3 10-K identified a meaningful compression in covenant headroom — from 0.7x to 0.3x — which warrants a brief conversation.\n\nGiven your current 18.2% allocation to private credit relative to your 15% IPS target, I'd recommend we discuss a modest reallocation into high-yield bonds to reduce concentration risk while maintaining yield.\n\nI have time Thursday or Friday this week. Would either work?\n\nBest,\nJames`,
-    `Dear Sarah,\n\nI'm reaching out about your Blackstone PE Strategic Capital IV holding. A review of their Q3 filing flagged compressed covenant headroom (0.7x → 0.3x), and I wanted to brief you before this becomes market news.\n\nYour private credit allocation is currently at 14.7% against a 15% IPS target — you're well-positioned, but I'd like to walk you through a scenario analysis.\n\nAre you available for a brief call this week?\n\nBest,\nJames`,
-    `Dear James,\n\nFollowing our analysis of the Blackstone PE Strategic Capital IV Q3 filing, I wanted to flag a development in your portfolio. Covenant headroom has compressed to 0.3x — a level that merits proactive review.\n\nYour current private credit allocation sits at 11.4% against an IPS target of 12%, so you have room to work with. I've modeled a scenario I'd like to walk through with you.\n\nPlease let me know your availability.\n\nBest,\nJames`,
-  ],
-  reallocation: {
-    from_asset: 'Private Credit',
-    from_pct: 18,
-    to_asset: 'High Yield Bonds',
-    to_pct: 14,
-    risk_impact: '−0.3%',
+interface CommRow {
+  client_id: string;
+  signal_id: string;
+  client_name: string;
+  aum_millions: number;
+  signal_type: string;
+  symbol: string;
+  email_draft: string;
+}
+
+// ── Signal metadata — alert banner copy and reallocation scenario per type ────
+
+const SIGNAL_META: Record<string, {
+  title: string;
+  sub: string;
+  detail: string;
+  reallocation: { from_asset: string; from_pct: number; to_asset: string; to_pct: number; risk_impact: string };
+}> = {
+  'Earnings Miss': {
+    title: 'PROACTIVE ALERT — Earnings Miss Detected',
+    sub: 'UnitedHealth Group (UNH) · Q3 2025 10-Q',
+    detail: 'Diluted EPS collapsed 60% YoY: $6.51 → $2.59 · Medical cost ratio +470bps to 89.9%',
+    reallocation: { from_asset: 'Healthcare Equities', from_pct: 20, to_asset: 'Investment Grade Bonds', to_pct: 16, risk_impact: '−0.4%' },
+  },
+  'Credit Event': {
+    title: 'PROACTIVE ALERT — Credit Event Detected',
+    sub: 'BlackRock TCP Capital (TCPC) · 8-K Filing',
+    detail: 'NAV collapsed 18.8% in Q1: $8.71 → $7.07 · Non-accruals at 9.7% · Leverage 1.41x',
+    reallocation: { from_asset: 'Private Credit', from_pct: 18, to_asset: 'High Yield Bonds', to_pct: 14, risk_impact: '−0.3%' },
+  },
+  'Private Credit Health': {
+    title: 'PROACTIVE ALERT — Private Credit Health Alert',
+    sub: 'FS KKR Capital (FSK) · Q1 10-K',
+    detail: '33% of net investment income now payment-in-kind · Non-accrual rate +55% YoY to 3.4%',
+    reallocation: { from_asset: 'Private Credit', from_pct: 18, to_asset: 'Investment Grade Bonds', to_pct: 14, risk_impact: '−0.2%' },
+  },
+  'Surprise Disclosure': {
+    title: 'PROACTIVE ALERT — Material Disclosure Detected',
+    sub: 'Adobe Inc. (ADBE) · Q1 Earnings Call',
+    detail: 'Stand-alone license business declining faster than guided · ARR headwind not previously disclosed',
+    reallocation: { from_asset: 'Technology Equities', from_pct: 22, to_asset: 'Diversified ETFs', to_pct: 18, risk_impact: '−0.2%' },
+  },
+  'IPS Breach — OVER': {
+    title: 'PROACTIVE ALERT — IPS Breach Detected',
+    sub: 'Asset class above maximum IPS band',
+    detail: 'One or more client accounts have exceeded their maximum IPS allocation band',
+    reallocation: { from_asset: 'Over-weight Asset Class', from_pct: 22, to_asset: 'Fixed Income', to_pct: 18, risk_impact: '−0.2%' },
   },
 };
 
+const SIGNAL_META_FALLBACK = {
+  title: 'PROACTIVE ALERT — Signal Detected',
+  sub: 'Portfolio monitoring alert',
+  detail: 'A high-severity signal was detected in your client portfolios',
+  reallocation: { from_asset: 'Equities', from_pct: 20, to_asset: 'Fixed Income', to_pct: 16, risk_impact: '−0.3%' },
+};
+
+// ── Dynamic agent cascade per signal type ────────────────────────────────────
+
+function buildSignalAgents(signalType: string, symbol: string, clientCount: number) {
+  const n = clientCount;
+  if (signalType === 'Earnings Miss') {
+    return [
+      { id: 1, name: 'Research Agent',
+        summary: `Detected ${symbol} Q3 earnings collapse in 10-Q filing.`,
+        detail: `Parsed Q3 2025 10-Q (filed November 2025). Diluted EPS: $2.59, down 60% year-over-year from $6.51. Consolidated operating earnings fell 50% to $4.3B. Medical cost ratio spiked 470 basis points to 89.9% across Medicare Advantage, Medicaid, and exchange products. Optum Health earnings collapsed 88%, signaling structural margin pressure, not a one-quarter event.` },
+      { id: 2, name: 'Portfolio Construction Agent',
+        summary: `Found ${n} client account${n !== 1 ? 's' : ''} with ${symbol} exposure.`,
+        detail: `Scanned all client portfolios for ${symbol} holdings. Identified ${n} account${n !== 1 ? 's' : ''} with active positions. Cross-referenced each account's IPS equity targets. All ${n} accounts remain within IPS bands, but the magnitude of fundamental deterioration — 60% EPS collapse, guidance suspended — materially elevates near-term risk. Flagged for advisor review before next client contact.` },
+      { id: 3, name: 'Client Personalization Agent',
+        summary: `Drafted ${n} personalized communication${n !== 1 ? 's' : ''} in advisor tone.`,
+        detail: `Generated individualized outreach for each affected client using prior advisor–client correspondence to match tone and style. Each draft references the client's specific ${symbol} position size, current IPS allocation context, and a recommended course of action (hold/trim/monitor). All drafts flagged for advisor review before send.` },
+    ];
+  }
+  if (signalType === 'Credit Event') {
+    return [
+      { id: 1, name: 'Research Agent',
+        summary: `Detected ${symbol} NAV collapse and credit deterioration in 8-K filing.`,
+        detail: `Parsed recent 8-K/10-K disclosure. ${symbol} (BlackRock TCP Capital) NAV per share declined 18.8% in a single quarter, with combined realized and unrealized losses exceeding $140M across six borrowers. Non-accruals spiked to 9.7% of portfolio fair value and leverage climbed to 1.41x. Classic BDC credit deterioration — position now down 23.4% since year-end 2024.` },
+      { id: 2, name: 'Portfolio Construction Agent',
+        summary: `Found ${n} client account${n !== 1 ? 's' : ''} with ${symbol} exposure.`,
+        detail: `Scanned all client portfolios for ${symbol} positions. Identified ${n} account${n !== 1 ? 's' : ''} with active holdings. Cross-referenced IPS private credit targets for each account. Assessed each account's current drift from IPS band and flagged for advisor notification and client disclosure per IPS policy.` },
+      { id: 3, name: 'Client Personalization Agent',
+        summary: `Drafted ${n} personalized communication${n !== 1 ? 's' : ''} in advisor tone.`,
+        detail: `Generated individualized outreach using prior advisor–client correspondence. Each draft references the client's specific ${symbol} position size, current drift from IPS band, and a recommended action (hold/trim/exit). All drafts flagged for advisor review before send.` },
+    ];
+  }
+  // Generic fallback for other signal types
+  return [
+    { id: 1, name: 'Research Agent',
+      summary: `Detected ${signalType} signal for ${symbol}.`,
+      detail: `Parsed recent regulatory filing and earnings materials for ${symbol}. Identified material development that warrants client notification per IPS monitoring policy. Signal flagged with high severity for immediate advisor review.` },
+    { id: 2, name: 'Portfolio Construction Agent',
+      summary: `Found ${n} client account${n !== 1 ? 's' : ''} with ${symbol} exposure.`,
+      detail: `Scanned all client portfolios for ${symbol} holdings. Identified ${n} affected account${n !== 1 ? 's' : ''}. Assessed each account's position against IPS targets and flagged for advisor review.` },
+    { id: 3, name: 'Client Personalization Agent',
+      summary: `Drafted ${n} personalized communication${n !== 1 ? 's' : ''} in advisor tone.`,
+      detail: `Generated individualized outreach for each affected client. Each draft is tailored to the client's position size, allocation context, and prior communication style. Flagged for advisor review before send.` },
+  ];
+}
+
+// ── Draft viewer — renders markdown, toggles to raw edit ─────────────────────
+
+function DraftViewer({ text, onChange }: { text: string; onChange: (v: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const html = useMemo(() => marked.parse(text) as string, [text]);
+
+  return (
+    <div className="space-y-2">
+      {editing ? (
+        <textarea
+          value={text}
+          onChange={(e) => onChange(e.target.value)}
+          rows={12}
+          autoFocus
+          className="w-full text-sm border rounded-md p-3 resize-none focus:outline-none focus:ring-1 focus:ring-[#1a3a5c] bg-background text-foreground font-mono leading-relaxed"
+        />
+      ) : (
+        <div
+          className="md-body border rounded-md p-3 bg-background min-h-[160px]"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      )}
+      <button
+        onClick={() => setEditing((v) => !v)}
+        className="flex items-center gap-1 text-xs text-[#1a3a5c] hover:underline"
+      >
+        {editing
+          ? <><Eye className="w-3 h-3" /> Preview</>
+          : <><Pencil className="w-3 h-3" /> Edit draft</>}
+      </button>
+    </div>
+  );
+}
+
 // ── Sub-components ────────────────────────────────────────────────────────────
 
-function AgentStep({
-  agent,
-  visible,
-}: {
-  agent: (typeof CASCADE.agents)[0];
-  visible: boolean;
-}) {
+type AgentDef = { id: number; name: string; summary: string; detail: string };
+
+function AgentStep({ agent, visible }: { agent: AgentDef; visible: boolean }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div
-      className={`transition-all duration-500 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}
-    >
+    <div className={`transition-all duration-500 ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
       <div className="flex gap-3">
         <div className="flex flex-col items-center">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -89,7 +178,7 @@ function AgentStep({
   );
 }
 
-// ── IPS Drift cascade builder ─────────────────────────────────────────────────
+// ── IPS Drift cascade builder (unchanged) ────────────────────────────────────
 
 interface DriftRow {
   client_name: string;
@@ -157,44 +246,102 @@ function buildDriftCascade(rawRow: DriftRow) {
 export function AgentsPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const { params: advisorParams } = useAdvisor();
+
   const driftState = (location.state as { trigger?: string; row?: DriftRow } | null);
   const isDrift = driftState?.trigger === 'ips_drift' && driftState.row;
   const driftCascade = isDrift ? buildDriftCascade(driftState.row!) : null;
 
+  // signal_id comes from the URL (?signal_id=xxx) set by alert card draft comms buttons
+  const signalId = searchParams.get('signal_id') ?? '';
+
+  const commsParams = { ...advisorParams, signal_id: sql.string(signalId) };
+  const { data: commsData, loading: commsLoading } = useAnalyticsQuery(
+    'client_communications',
+    commsParams,
+  );
+  const commsRows = (commsData ?? []) as unknown as CommRow[];
+
+  const signalType = commsRows[0]?.signal_type ?? 'Earnings Miss';
+  const meta = SIGNAL_META[signalType] ?? SIGNAL_META_FALLBACK;
+
+  const affectedClients = commsRows.map((r) => ({
+    name: r.client_name,
+    aum_millions: Number(r.aum_millions),
+    tier: Number(r.aum_millions) >= 5 ? 'UHNW' : 'HNW',
+    draft: r.email_draft,
+  }));
+
+  const signalAgents = buildSignalAgents(signalType, commsRows[0]?.symbol ?? '', affectedClients.length);
+  const activeAgents = isDrift ? driftCascade!.agents : signalAgents;
+
   const [visibleSteps, setVisibleSteps] = useState<number[]>([]);
   const [selectedClient, setSelectedClient] = useState(0);
-  const [draftText, setDraftText] = useState(
-    driftCascade ? driftCascade.draft : CASCADE.draft_templates[0]
-  );
+  const [draftText, setDraftText] = useState('');
   const [approved, setApproved] = useState(false);
 
-  const activeAgents = driftCascade ? driftCascade.agents : CASCADE.agents;
-
-  // Stagger agent steps appearing on mount
+  // Stagger agent steps on mount
   useEffect(() => {
     activeAgents.forEach((a, i) => {
       setTimeout(() => setVisibleSteps((v) => [...v, a.id]), i * 400);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync draft when client tab changes (covenant mode only)
+  // Initialize draft once comms data loads
   useEffect(() => {
-    if (!isDrift) setDraftText(CASCADE.draft_templates[selectedClient]);
-  }, [selectedClient, isDrift]);
+    if (!isDrift && affectedClients.length > 0 && !draftText) {
+      setDraftText(affectedClients[0].draft);
+    }
+  }, [affectedClients.length, isDrift]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync draft when client tab changes (non-drift mode)
+  useEffect(() => {
+    if (!isDrift && affectedClients.length > 0) {
+      setDraftText(affectedClients[selectedClient]?.draft ?? '');
+    }
+  }, [selectedClient, isDrift]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync draft for drift mode — prefer AI-drafted markdown email when available,
+  // fall back to the programmatic draft while the query is still loading.
+  useEffect(() => {
+    if (!isDrift) return;
+    if (commsRows.length > 0) {
+      setDraftText(commsRows[0].email_draft);
+    } else if (driftCascade) {
+      setDraftText(driftCascade.draft);
+    }
+  }, [isDrift, commsRows.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const alertTitle = isDrift
     ? `IPS Drift Alert — ${driftState!.row!.drift_status}`
-    : 'PROACTIVE ALERT — Covenant Breach Risk Detected';
+    : meta.title;
   const alertSub = isDrift
     ? `${driftState!.row!.client_name} · ${driftState!.row!.account_name}`
-    : CASCADE.holding_name;
+    : meta.sub;
   const alertDetail = isDrift
     ? `${driftCascade!.trigger} · Detected ${driftCascade!.triggered_at}`
-    : `${CASCADE.trigger} · Detected ${CASCADE.triggered_at}`;
+    : meta.detail;
   const draftLabel = isDrift
     ? `Draft Communication — ${driftState!.row!.client_name}`
-    : `Draft Communication — ${CASCADE.affected_clients[selectedClient].name}`;
+    : affectedClients[selectedClient]
+      ? `Draft Communication — ${affectedClients[selectedClient].name}`
+      : 'Draft Communication';
   const dismissTarget = isDrift ? '/drift' : '/';
+  const realloc = isDrift ? null : meta.reallocation;
+
+  if (!isDrift && !signalId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-3 text-center text-muted-foreground">
+        <Eye className="w-8 h-8 opacity-30" />
+        <p className="text-sm font-medium">No alert selected</p>
+        <p className="text-xs max-w-xs">
+          Click the <MessageSquare className="inline w-3 h-3 mb-0.5" /> draft comms icon on any
+          alert in the Portfolio or Document Intelligence page to open it here.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 max-w-[1400px]">
@@ -210,14 +357,6 @@ export function AgentsPage() {
           <p className="text-sm text-red-700 mt-0.5">{alertSub}</p>
           <p className="text-xs text-red-600 mt-1">{alertDetail}</p>
         </div>
-        {!isDrift && (
-          <button
-            onClick={() => navigate('/documents?holding=blackstone-pe-sc4')}
-            className="ml-auto text-xs text-red-700 underline underline-offset-2 hover:text-red-900 flex-shrink-0"
-          >
-            View source →
-          </button>
-        )}
       </div>
 
       {/* Two-column body */}
@@ -260,32 +399,36 @@ export function AgentsPage() {
         {/* ── Right: Human-in-the-loop ── */}
         <div className="space-y-4">
 
-          {/* Affected clients (covenant mode only) */}
+          {/* Affected clients (non-drift mode only) */}
           {!isDrift && (
             <Card className="shadow-sm">
               <CardContent className="pt-5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Affected Clients ({CASCADE.affected_clients.length})
+                  Affected Clients ({commsLoading ? '…' : affectedClients.length})
                 </p>
-                <div className="space-y-2">
-                  {CASCADE.affected_clients.map((c, i) => (
-                    <button
-                      key={c.name}
-                      onClick={() => setSelectedClient(i)}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition-colors ${
-                        selectedClient === i
-                          ? 'border-[#1a3a5c] bg-[#1a3a5c]/5 text-foreground'
-                          : 'border-border hover:bg-muted/50 text-muted-foreground'
-                      }`}
-                    >
-                      <span className="font-medium">{c.name}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="tabular-nums text-muted-foreground">${c.aum_millions}M</span>
-                        <Badge variant="outline" className="text-[10px] py-0">{c.tier}</Badge>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+                {commsLoading ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">Loading…</div>
+                ) : (
+                  <div className="space-y-2">
+                    {affectedClients.map((c, i) => (
+                      <button
+                        key={c.name}
+                        onClick={() => setSelectedClient(i)}
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition-colors ${
+                          selectedClient === i
+                            ? 'border-[#1a3a5c] bg-[#1a3a5c]/5 text-foreground'
+                            : 'border-border hover:bg-muted/50 text-muted-foreground'
+                        }`}
+                      >
+                        <span className="font-medium">{c.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="tabular-nums text-muted-foreground">${c.aum_millions}M</span>
+                          <Badge variant="outline" className="text-[10px] py-0">{c.tier}</Badge>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -302,18 +445,19 @@ export function AgentsPage() {
                 <div className="flex flex-col items-center justify-center gap-2 py-6 text-emerald-600">
                   <CheckCheck className="w-8 h-8" />
                   <p className="text-sm font-semibold">
-                    {isDrift ? 'Communication queued for 1 client' : 'Communications queued for 3 clients'}
+                    {isDrift
+                      ? 'Communication queued for 1 client'
+                      : `Communications queued for ${affectedClients.length} client${affectedClients.length !== 1 ? 's' : ''}`}
                   </p>
                   <p className="text-xs text-muted-foreground">Audit record saved · {new Date().toLocaleTimeString()}</p>
                 </div>
               ) : (
                 <>
-                  <textarea
-                    value={draftText}
-                    onChange={(e) => setDraftText(e.target.value)}
-                    rows={10}
-                    className="w-full text-sm border rounded-md p-3 resize-none focus:outline-none focus:ring-1 focus:ring-[#1a3a5c] bg-background text-foreground"
-                  />
+                  {commsLoading && !isDrift ? (
+                    <div className="text-sm text-muted-foreground py-4 text-center">Loading draft…</div>
+                  ) : (
+                    <DraftViewer text={draftText} onChange={setDraftText} />
+                  )}
                   <div className="flex gap-2">
                     <button
                       onClick={() => setApproved(true)}
@@ -333,22 +477,22 @@ export function AgentsPage() {
             </CardContent>
           </Card>
 
-          {/* Re-allocation scenario (covenant mode only) */}
-          {!isDrift && (
+          {/* Re-allocation scenario (non-drift mode only) */}
+          {!isDrift && realloc && (
             <Card className="shadow-sm">
               <CardContent className="pt-5 space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Re-Allocation Scenario</p>
                 <div className="flex items-center justify-between text-sm">
                   <div className="space-y-1">
                     <p className="text-muted-foreground text-xs">Reduce</p>
-                    <p className="font-medium">{CASCADE.reallocation.from_asset}</p>
-                    <p className="text-xs text-muted-foreground">{CASCADE.reallocation.from_pct}% → {CASCADE.reallocation.to_pct}%</p>
+                    <p className="font-medium">{realloc.from_asset}</p>
+                    <p className="text-xs text-muted-foreground">{realloc.from_pct}% → {realloc.to_pct}%</p>
                   </div>
                   <div className="text-muted-foreground text-xl">→</div>
                   <div className="space-y-1 text-right">
                     <p className="text-muted-foreground text-xs">Reallocate to</p>
-                    <p className="font-medium">{CASCADE.reallocation.to_asset}</p>
-                    <p className="text-xs text-emerald-600">Est. risk impact: {CASCADE.reallocation.risk_impact}</p>
+                    <p className="font-medium">{realloc.to_asset}</p>
+                    <p className="text-xs text-emerald-600">Est. risk impact: {realloc.risk_impact}</p>
                   </div>
                 </div>
                 <button
