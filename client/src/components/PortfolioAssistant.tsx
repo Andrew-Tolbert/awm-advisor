@@ -1,13 +1,13 @@
-import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Sparkles, X } from 'lucide-react';
 import { AdvisorChat } from './chat/AdvisorChat';
 import { PREFAB_PROMPTS } from '../data/prefab-prompts';
+import { useUiStore } from './chat/useChatStore';
 
 const PRIMARY_CHIPS = PREFAB_PROMPTS.portfolio.map((p) => p.prompt);
 
 export function PortfolioAssistant() {
-  const [chatOpen, setChatOpen] = useState(false);
+  const { chatOpen, openChat, closeChat } = useUiStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -17,7 +17,7 @@ export function PortfolioAssistant() {
   return (
     <>
       <button
-        onClick={() => setChatOpen((o) => !o)}
+        onClick={() => chatOpen ? closeChat() : openChat()}
         className="fixed bottom-6 right-6 z-[10000] w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all bg-[#0E1928] text-white hover:bg-[#1a2a3e]"
         title={chatOpen ? 'Close assistant' : 'Open assistant'}
       >
@@ -36,7 +36,7 @@ export function PortfolioAssistant() {
               floatingTitle="Portfolio Assistant"
               onOpenInMainView={() => {
                 void navigate('/genie');
-                setChatOpen(false);
+                closeChat();
               }}
             />
           </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
   useAnalyticsQuery,
@@ -21,11 +21,15 @@ interface StatCardProps {
   sub: string;
   trend: 'up' | 'down' | 'neutral';
   loading?: boolean;
+  onClick?: () => void;
 }
 
-function StatCard({ label, value, sub, trend, loading }: StatCardProps) {
+function StatCard({ label, value, sub, trend, loading, onClick }: StatCardProps) {
   return (
-    <Card className="shadow-sm">
+    <Card
+      className={`shadow-sm ${onClick ? 'cursor-pointer hover:shadow-md hover:border-foreground/20 transition-all' : ''}`}
+      onClick={onClick}
+    >
       <CardContent className="pt-5 pb-4">
         {loading ? (
           <div className="space-y-2">
@@ -66,11 +70,14 @@ interface HoldingsTableProps {
   data: Holding[] | undefined;
   loading: boolean;
   onRowClick: (holdingId: string) => void;
+  assetClassFilter?: string;
 }
 
-function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
+function HoldingsTable({ data, loading, onRowClick, assetClassFilter: externalFilter = '' }: HoldingsTableProps) {
   const [nameFilter, setNameFilter] = useState('');
-  const [assetClassFilter, setAssetClassFilter] = useState('');
+  const [assetClassFilter, setAssetClassFilter] = useState(externalFilter);
+
+  useEffect(() => { setAssetClassFilter(externalFilter); }, [externalFilter]);
 
   const assetClasses = useMemo(
     () => [...new Set((data ?? []).map((h) => h.asset_class))].sort(),
@@ -311,6 +318,8 @@ export function PortfolioPage() {
     });
   }, [alertsData, navigate]);
 
+  const [holdingsAssetFilter, setHoldingsAssetFilter] = useState('');
+
   const s = summary?.[0] as Record<string, number> | undefined;
 
   const fmtAum = (v: number) => {
@@ -359,6 +368,7 @@ export function PortfolioPage() {
           sub="Above threshold"
           trend="down"
           loading={summaryLoading}
+          onClick={() => navigate('/drift')}
         />
         <StatCard
           label="Clients at Risk"
@@ -366,6 +376,7 @@ export function PortfolioPage() {
           sub="Needs review"
           trend="down"
           loading={summaryLoading}
+          onClick={() => navigate('/drift')}
         />
       </div>
 
@@ -400,22 +411,23 @@ export function PortfolioPage() {
               showLegend={false}
               height={260}
             />
-            {/* Clickable legend — each chip navigates to Documents filtered by asset class */}
+            {/* Clickable legend — filters Holdings table by asset class */}
             <div className="flex flex-wrap gap-1.5 pt-1">
               {((allocationData ?? []) as Array<{ asset_class: string; pct_of_portfolio: number }>).map((row) => {
-                const acColors: Record<string, string> = {
-                  'Equity':         'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
-                  'Fixed Income':   'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100',
-                  'Alternatives':   'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
-                  'Private Credit': 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
-                  'Commodities':    'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
+                const active = holdingsAssetFilter === row.asset_class;
+                const acColors: Record<string, { idle: string; on: string }> = {
+                  'Equity':         { idle: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',     on: 'bg-blue-600 text-white border-blue-600' },
+                  'Fixed Income':   { idle: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100',     on: 'bg-teal-600 text-white border-teal-600' },
+                  'Alternatives':   { idle: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100', on: 'bg-purple-600 text-white border-purple-600' },
+                  'Private Credit': { idle: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100', on: 'bg-amber-600 text-white border-amber-600' },
+                  'Commodities':    { idle: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100', on: 'bg-orange-600 text-white border-orange-600' },
                 };
-                const cls = acColors[row.asset_class] ?? 'bg-muted text-muted-foreground border-border hover:bg-muted/80';
+                const palette = acColors[row.asset_class] ?? { idle: 'bg-muted text-muted-foreground border-border hover:bg-muted/80', on: 'bg-foreground text-background border-foreground' };
                 return (
                   <button
                     key={row.asset_class}
-                    onClick={() => navigate(`/documents?asset_class=${encodeURIComponent(row.asset_class)}`)}
-                    className={`text-[10px] px-2 py-0.5 rounded border font-medium transition-colors cursor-pointer ${cls}`}
+                    onClick={() => setHoldingsAssetFilter(active ? '' : row.asset_class)}
+                    className={`text-[10px] px-2 py-0.5 rounded border font-medium transition-colors cursor-pointer ${active ? palette.on : palette.idle}`}
                   >
                     {row.asset_class} · {Number(row.pct_of_portfolio).toFixed(1)}%
                   </button>
@@ -497,13 +509,24 @@ export function PortfolioPage() {
       <div className="grid grid-cols-3 gap-4">
         <Card className="col-span-2 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Top Holdings</CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">Top Holdings</CardTitle>
+              {holdingsAssetFilter && (
+                <button
+                  onClick={() => setHoldingsAssetFilter('')}
+                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                >
+                  {holdingsAssetFilter} ×
+                </button>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
             <HoldingsTable
               data={holdings as unknown as Holding[]}
               loading={holdingsLoading}
               onRowClick={(id) => navigate(`/documents?holding=${id}`)}
+              assetClassFilter={holdingsAssetFilter}
             />
           </CardContent>
         </Card>

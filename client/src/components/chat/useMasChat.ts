@@ -2,12 +2,32 @@ import { useEffect, useRef, useState } from 'react';
 import { getCachedResponse } from '../../data/prefab-prompts';
 import { getCached, setCached } from '../../lib/answerCache';
 import {
-  appendMessage,
+  appendMessage as globalAppend,
   getState,
   newConversation,
-  updateLastAssistant,
+  updateLastAssistant as globalUpdateLast,
   useChatStore,
 } from './useChatStore';
+import type { Message } from './types';
+
+export interface ChatOps {
+  ensureConvId: () => string;
+  appendMessage: (convId: string, msg: Message) => void;
+  updateLastAssistant: (convId: string, content: string) => void;
+  getMessages: (convId: string) => Message[];
+}
+
+const globalOps: ChatOps = {
+  ensureConvId: () => {
+    let id = getState().activeId;
+    if (!id) id = newConversation();
+    return id;
+  },
+  appendMessage: globalAppend,
+  updateLastAssistant: globalUpdateLast,
+  getMessages: (convId) =>
+    getState().conversations.find((c) => c.id === convId)?.messages ?? [],
+};
 
 const CACHE_SOURCE = 'mas-supervisor';
 
@@ -191,6 +211,7 @@ async function streamCachedResponse(
   content: string,
   signal: AbortSignal,
   onTrace: (label: string) => void,
+  updateFn: (convId: string, content: string) => void,
 ) {
   const chunkSize = Math.max(1, Math.ceil(content.length / CACHE_NUM_CHUNKS));
   const intervalMs = CACHE_TOTAL_MS / CACHE_NUM_CHUNKS;
@@ -201,19 +222,23 @@ async function streamCachedResponse(
       Math.floor((i / content.length) * CACHED_TRACE_SEQUENCE.length),
     );
     onTrace(CACHED_TRACE_SEQUENCE[traceIdx]);
-    updateLastAssistant(convId, content.slice(0, Math.min(i + chunkSize, content.length)));
+    updateFn(convId, content.slice(0, Math.min(i + chunkSize, content.length)));
     await new Promise((r) => setTimeout(r, intervalMs));
   }
-  updateLastAssistant(convId, content);
+  updateFn(convId, content);
 }
 
-export function useMasChat() {
-  // Subscribe so callers re-render on store changes; the hook itself doesn't read
-  // values off this object — it reads from getState() to avoid stale closures.
+export function useMasChat(ops: ChatOps = globalOps) {
+  // Subscribe to the global store for re-renders; isolated instances manage their own state.
   useChatStore();
+
   const [isStreaming, setIsStreaming] = useState(false);
   const [traceStatus, setTraceStatus] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Keep a stable ref to ops so async send() always sees the latest version.
+  const opsRef = useRef(ops);
+  useEffect(() => { opsRef.current = ops; }, [ops]);
 
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -225,14 +250,11 @@ export function useMasChat() {
     const trimmed = content.trim();
     if (!trimmed || isStreaming) return;
     const forceRefresh = Boolean(opts?.forceRefresh);
+    const o = opsRef.current;
 
-    let convId = getState().activeId;
-    if (!convId) convId = newConversation();
-
-    appendMessage(convId, { role: 'user', content: trimmed });
-
-    const snapshot = getState().conversations.find((c) => c.id === convId);
-    const messagesForApi = snapshot?.messages ?? [];
+    const convId = o.ensureConvId();
+    o.appendMessage(convId, { role: 'user', content: trimmed });
+    const messagesForApi = o.getMessages(convId);
 
     // Only fresh single-turn questions are eligible for any cache layer.
     // Follow-up turns must always hit the live agent because they depend on context.
@@ -243,14 +265,14 @@ export function useMasChat() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    appendMessage(convId, { role: 'assistant', content: '' });
+    o.appendMessage(convId, { role: 'assistant', content: '' });
 
     if (isFresh && !forceRefresh) {
       // Layer 1: hand-curated prefab cache (chip-click prompts).
       const prefab = getCachedResponse(trimmed);
       if (prefab) {
         try {
-          await streamCachedResponse(convId, prefab, controller.signal, setTraceStatus);
+          await streamCachedResponse(convId, prefab, controller.signal, setTraceStatus, o.updateLastAssistant);
         } finally {
           setIsStreaming(false);
           setTraceStatus(null);
@@ -262,7 +284,7 @@ export function useMasChat() {
       const local = getCached(CACHE_SOURCE, trimmed);
       if (local) {
         try {
-          await streamCachedResponse(convId, local, controller.signal, setTraceStatus);
+          await streamCachedResponse(convId, local, controller.signal, setTraceStatus, o.updateLastAssistant);
         } finally {
           setIsStreaming(false);
           setTraceStatus(null);
@@ -282,10 +304,7 @@ export function useMasChat() {
 
       if (!res.ok || !res.body) {
         const errText = await res.text().catch(() => '');
-        updateLastAssistant(
-          convId,
-          `Error: ${res.status} ${errText.slice(0, 200)}`.trim(),
-        );
+        o.updateLastAssistant(convId, `Error: ${res.status} ${errText.slice(0, 200)}`.trim());
         return;
       }
 
@@ -329,9 +348,8 @@ export function useMasChat() {
           if (parsed.trace) latestTrace = parsed.trace;
         }
         if (events.length > 0) {
-          // Show whichever stream has content; prefer final-only when present.
           const display = finalAssembled || allAssembled;
-          if (display) updateLastAssistant(convId, display);
+          if (display) o.updateLastAssistant(convId, display);
           if (latestTrace) setTraceStatus(latestTrace);
         }
       }
@@ -340,20 +358,15 @@ export function useMasChat() {
         ingest(parsed);
         if (parsed.trace) setTraceStatus(parsed.trace);
       }
-      // Pick the best representation of the final answer:
-      // 1. Authoritative text from `response.completed`'s final_response item
-      // 2. Streamed deltas filtered to the final_response item id
-      // 3. All streamed deltas (fallback if endpoint never marks final_response)
       const finalText = completedFinalText ?? finalAssembled ?? allAssembled;
-      updateLastAssistant(convId, finalText || allAssembled);
-      // Save to localStorage so a future fresh ask of the same question short-circuits.
+      o.updateLastAssistant(convId, finalText || allAssembled);
       if (isFresh && finalText) {
         setCached(CACHE_SOURCE, trimmed, finalText);
       }
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         console.error('[advisor-chat]', err);
-        updateLastAssistant(convId, 'Sorry — the assistant ran into an error.');
+        o.updateLastAssistant(convId, 'Sorry — the assistant ran into an error.');
       }
     } finally {
       setIsStreaming(false);

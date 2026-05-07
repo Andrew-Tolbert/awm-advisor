@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router';
+import { AdvisorChat } from '../../components/chat/AdvisorChat';
 import {
   useAnalyticsQuery,
   HeatmapChart,
@@ -9,7 +10,7 @@ import {
   CardTitle,
   Skeleton,
 } from '@databricks/appkit-ui/react';
-import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, ChevronUp, ChevronDown, ChevronsUpDown, MessageSquare, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, AlertTriangle, CheckCircle2, ChevronUp, ChevronDown, ChevronsUpDown, MessageSquare, ExternalLink, Sparkles } from 'lucide-react';
 import { useAdvisor } from '../../contexts/AdvisorContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -115,16 +116,22 @@ function rowBg(_status: string, _idx: number, clientGroupEven: boolean, severity
 // ── KPI stat card ─────────────────────────────────────────────────────────────
 
 function StatCard({
-  label, value, sub, loading, accent,
+  label, value, sub, loading, accent, onClick, active,
 }: {
-  label: string; value: string; sub: string; loading: boolean; accent?: 'red' | 'amber' | 'neutral';
+  label: string; value: string; sub: string; loading: boolean;
+  accent?: 'red' | 'amber' | 'neutral';
+  onClick?: () => void;
+  active?: boolean;
 }) {
   const color =
     accent === 'red' ? 'text-red-600' :
     accent === 'amber' ? 'text-amber-600' :
     'text-foreground';
   return (
-    <Card className="shadow-sm">
+    <Card
+      className={`shadow-sm transition-all ${onClick ? 'cursor-pointer hover:shadow-md hover:border-foreground/20' : ''} ${active ? 'ring-2 ring-[#1a3a5c] border-[#1a3a5c]' : ''}`}
+      onClick={onClick}
+    >
       <CardContent className="pt-5 pb-4">
         {loading ? (
           <div className="space-y-2">
@@ -155,7 +162,12 @@ interface AssetClassStats {
   totalRtt: number; // sum of abs(rebalance_to_target) for breaches
 }
 
-function AssetClassSummary({ stats, loading }: { stats: AssetClassStats[]; loading: boolean }) {
+function AssetClassSummary({ stats, loading, activeAsset, onAssetClick }: {
+  stats: AssetClassStats[];
+  loading: boolean;
+  activeAsset?: string;
+  onAssetClick?: (ac: string) => void;
+}) {
   const ORDER = ['Equity', 'Alternatives', 'Fixed Income', 'Private Credit', 'ETF'];
   const sorted = [...stats].sort(
     (a, b) => ORDER.indexOf(a.assetClass) - ORDER.indexOf(b.assetClass),
@@ -176,10 +188,15 @@ function AssetClassSummary({ stats, loading }: { stats: AssetClassStats[]; loadi
       {sorted.map((s) => {
         const breachCount = s.over + s.under;
         const hasBreaches = breachCount > 0;
+        const isActive = activeAsset === s.assetClass;
         return (
-          <div
+          <button
             key={s.assetClass}
-            className={`flex items-center justify-between rounded-md border px-3 py-2 ${hasBreaches ? 'border-red-200 bg-red-50/40' : 'border-border bg-muted/20'}`}
+            onClick={() => onAssetClick?.(s.assetClass)}
+            className={`w-full flex items-center justify-between rounded-md border px-3 py-2 transition-all text-left
+              ${isActive ? 'border-[#1a3a5c] bg-[#1a3a5c]/5 ring-1 ring-[#1a3a5c]' :
+                hasBreaches ? 'border-red-200 bg-red-50/40 hover:bg-red-50/70' : 'border-border bg-muted/20 hover:bg-muted/40'}
+              ${onAssetClick ? 'cursor-pointer' : ''}`}
           >
             <p className="text-xs font-semibold text-foreground">{s.assetClass}</p>
             <div className="flex items-center gap-2 text-xs">
@@ -190,7 +207,7 @@ function AssetClassSummary({ stats, loading }: { stats: AssetClassStats[]; loadi
                 <span className="text-muted-foreground tabular-nums">{fmtM(s.totalRtt)}</span>
               )}
             </div>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -212,6 +229,8 @@ export function DriftPage() {
   const navigate = useNavigate();
   const { advisor, params: advisorParams } = useAdvisor();
   const { data: rawData, loading } = useAnalyticsQuery('account_drift', advisorParams);
+
+  const [driftChat, setDriftChat] = useState<{ open: boolean; prompt: { hidden: string } | undefined }>({ open: false, prompt: undefined });
 
   const rows = useMemo(
     () => (rawData ?? []) as unknown as AccountDriftRow[],
@@ -276,7 +295,11 @@ export function DriftPage() {
       (r) =>
         (!clientFilter || r.client_id === clientFilter) &&
         (!assetFilter || r.asset_class === assetFilter) &&
-        (!statusFilter || r.drift_status === statusFilter),
+        (!statusFilter || (
+          statusFilter === '!Within Band'
+            ? r.drift_status !== 'Within Band'
+            : r.drift_status === statusFilter
+        )),
     );
     const severityPriority = (s: string) => s === 'Critical' ? 0 : 1;
     const statusPriority = (s: string) => s === 'Over Band' ? 0 : s === 'Under Band' ? 1 : 2;
@@ -331,6 +354,8 @@ export function DriftPage() {
           sub="out-of-band accounts"
           loading={loading}
           accent="red"
+          onClick={() => setStatusFilter(statusFilter === '!Within Band' ? '' : '!Within Band')}
+          active={statusFilter === '!Within Band'}
         />
         <StatCard
           label="Clients at Risk"
@@ -338,6 +363,8 @@ export function DriftPage() {
           sub="with ≥1 breach"
           loading={loading}
           accent="amber"
+          onClick={() => setStatusFilter(statusFilter === '!Within Band' ? '' : '!Within Band')}
+          active={statusFilter === '!Within Band'}
         />
         <StatCard
           label="$ to Band"
@@ -345,6 +372,8 @@ export function DriftPage() {
           sub="min trade to resolve breaches"
           loading={loading}
           accent="amber"
+          onClick={() => setStatusFilter(statusFilter === '!Within Band' ? '' : '!Within Band')}
+          active={statusFilter === '!Within Band'}
         />
         <StatCard
           label="$ to Target"
@@ -362,7 +391,12 @@ export function DriftPage() {
             <CardTitle className="text-sm font-semibold">Drift by Asset Class</CardTitle>
           </CardHeader>
           <CardContent className="pt-2">
-            <AssetClassSummary stats={assetStats} loading={loading} />
+            <AssetClassSummary
+              stats={assetStats}
+              loading={loading}
+              activeAsset={assetFilter}
+              onAssetClick={(ac) => setAssetFilter(assetFilter === ac ? '' : ac)}
+            />
           </CardContent>
         </Card>
         <Card className="shadow-sm col-span-3">
@@ -432,6 +466,7 @@ export function DriftPage() {
                 className="h-7 px-2 text-xs rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
               >
                 <option value="">All statuses</option>
+                <option value="!Within Band">Out of Band</option>
                 <option value="Over Band">Over Band</option>
                 <option value="Under Band">Under Band</option>
                 <option value="Within Band">Within Band</option>
@@ -473,12 +508,11 @@ export function DriftPage() {
                     </th>
                     {th('Δ%', 'delta_pct')}
                     {th('$ to Band', 'rebalance_to_band')}
-                    {th('$ to Target', 'rebalance_to_target')}
                     <th className="py-2 pr-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       Status
                     </th>
                     {th('Severity', 'drift_severity')}
-                    <th className="py-2 pl-2 w-8" />
+                    <th className="py-2 pl-2 w-12" />
                   </tr>
                 </thead>
                 <tbody>
@@ -491,7 +525,6 @@ export function DriftPage() {
                       prevRow.account_id !== row.account_id ||
                       prevRow.client_id !== row.client_id;
                     const deltaNeg = row.delta_pct < 0;
-                    const rttNeg = row.rebalance_to_target < 0;
 
                     const isCritical = row.drift_severity === 'Critical';
                     return (
@@ -541,17 +574,6 @@ export function DriftPage() {
                             : <span className="text-amber-700 font-medium">{fmtM(row.rebalance_to_band)}</span>
                           }
                         </td>
-                        {/* $ to Target */}
-                        <td className="py-1.5 pr-3 text-right tabular-nums text-xs">
-                          {row.rebalance_to_target === 0
-                            ? <span className="text-muted-foreground">—</span>
-                            : (
-                              <span className={rttNeg ? 'text-red-600 font-medium' : 'text-emerald-700 font-medium'}>
-                                {rttNeg ? '' : '+'}{fmtM(row.rebalance_to_target)}
-                              </span>
-                            )
-                          }
-                        </td>
                         {/* Status */}
                         <td className="py-1.5 pr-3 text-right">
                           <StatusBadge status={row.drift_status} />
@@ -561,16 +583,30 @@ export function DriftPage() {
                           <SeverityBadge severity={row.drift_severity} />
                         </td>
                         {/* Action */}
-                        <td className="py-1.5 pl-3 text-right">
-                          {(row.drift_status === 'Over Band' || row.drift_status === 'Under Band') && (
+                        <td className="py-1.5 pl-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
                             <button
-                              onClick={() => navigate('/agents', { state: { trigger: 'ips_drift', row } })}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium bg-[#1a3a5c] text-white hover:bg-[#1a3a5c]/85 transition-colors whitespace-nowrap"
+                              onClick={() => setDriftChat({
+                                open: true,
+                                prompt: {
+                                  hidden: ` [Scope: advisor_id=${row.advisor_id}, client_id=${row.client_id}, account_id=${row.account_id}, asset_class="${row.asset_class}"]`,
+                                },
+                              })}
+                              className="p-1 rounded text-amber-600 hover:bg-amber-50 transition-colors"
+                              title="Ask AI about this drift"
                             >
-                              <MessageSquare className="w-3 h-3" />
-                              Draft Comms
+                              <Sparkles className="w-3.5 h-3.5" />
                             </button>
-                          )}
+                            {(row.drift_status === 'Over Band' || row.drift_status === 'Under Band') && (
+                              <button
+                                onClick={() => navigate('/agents', { state: { trigger: 'ips_drift', row } })}
+                                className="p-1 rounded text-[#1a3a5c] hover:bg-[#1a3a5c]/10 transition-colors"
+                                title="Draft client communications"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -581,6 +617,27 @@ export function DriftPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Drift-specific floating chat — independent from the global portfolio assistant */}
+      {driftChat.open && (
+        <div className="fixed bottom-6 right-6 z-[9999] w-[480px]" style={{ animation: 'fade-in 0.15s ease-out' }}>
+          <AdvisorChat
+            key={driftChat.prompt?.hidden ?? 'drift'}
+            mode="floating"
+            isolated
+            floatingTitle="Account Analysis"
+            hiddenContext={driftChat.prompt?.hidden ?? ''}
+            primaryChips={[
+              'Are there tax loss harvesting strategies applicable to this position?',
+              'What positions are driving the drift in this account?',
+              'How much would I need to sell to bring this back within the IPS band?',
+              'Draft client outreach for this account regarding the allocation drift',
+            ]}
+            placeholder="Ask about this position's drift or TLH options…"
+            onClose={() => setDriftChat({ open: false, prompt: undefined })}
+          />
+        </div>
+      )}
     </div>
   );
 }

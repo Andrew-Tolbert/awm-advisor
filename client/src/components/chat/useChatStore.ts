@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { ChatStoreState, Conversation, Message } from './types';
 
+interface PendingPrompt {
+  display: string; // shown in textarea and chat bubble
+  hidden: string;  // silently appended to the actual agent call, never rendered
+}
+
+interface UiState {
+  chatOpen: boolean;
+  pendingPrompt: PendingPrompt | null;
+}
+
 const STORAGE_KEY = 'awm-advisor-chats-v1';
 
 type Listener = () => void;
@@ -21,6 +31,34 @@ function loadFromStorage(): ChatStoreState {
 }
 
 let state: ChatStoreState = loadFromStorage();
+let ui: UiState = { chatOpen: false, pendingPrompt: null };
+const uiListeners = new Set<() => void>();
+
+function emitUi() { uiListeners.forEach((l) => l()); }
+function setUi(updater: (s: UiState) => UiState) { ui = updater(ui); emitUi(); }
+
+export function openChat()  { setUi((s) => ({ ...s, chatOpen: true })); }
+export function closeChat() { setUi((s) => ({ ...s, chatOpen: false })); }
+
+/** Pre-fills the chat input with `display` text and opens the assistant.
+ *  `hidden` is silently appended when the user submits — never shown anywhere. */
+export function queueMessage(display: string, hidden: string) {
+  setUi(() => ({ chatOpen: true, pendingPrompt: { display, hidden } }));
+}
+
+export function clearPendingPrompt() {
+  setUi((s) => ({ ...s, pendingPrompt: null }));
+}
+
+export function useUiStore() {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const l = () => force((x) => x + 1);
+    uiListeners.add(l);
+    return () => { uiListeners.delete(l); };
+  }, []);
+  return { chatOpen: ui.chatOpen, pendingPrompt: ui.pendingPrompt, openChat, closeChat, queueMessage, clearPendingPrompt };
+}
 
 function persist() {
   if (typeof window === 'undefined') return;
@@ -117,6 +155,15 @@ export function updateLastAssistant(convId: string, content: string) {
       }
       return { ...c, messages: msgs, updatedAt: Date.now() };
     }),
+  }));
+}
+
+export function clearConversation(id: string) {
+  setState((s) => ({
+    ...s,
+    conversations: s.conversations.map((c) =>
+      c.id === id ? { ...c, messages: [], title: 'New conversation', updatedAt: Date.now() } : c
+    ),
   }));
 }
 

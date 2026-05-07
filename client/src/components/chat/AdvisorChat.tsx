@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { Download, Maximize2, Plus, RefreshCw, Send, Sparkles, Square } from 'lucide-react';
+import { Download, Maximize2, RefreshCw, RotateCcw, Send, Sparkles, Square, X } from 'lucide-react';
 import { MessageBubble } from './MessageBubble';
 import { PromptChips } from './PromptChips';
-import { newConversation, useChatStore } from './useChatStore';
-import { useMasChat } from './useMasChat';
-import type { Conversation } from './types';
+import { clearConversation, newConversation, useChatStore, useUiStore } from './useChatStore';
+import { useMasChat, type ChatOps } from './useMasChat';
+import type { Conversation, Message } from './types';
 
 interface AdvisorChatProps {
   mode: 'floating' | 'panel';
@@ -16,6 +16,12 @@ interface AdvisorChatProps {
   onOpenInMainView?: () => void;
   /** Floating mode only — title shown in compact header. */
   floatingTitle?: string;
+  /** Floating mode only — renders an X button in the header. */
+  onClose?: () => void;
+  /** Silently appended to every message sent from this instance. Never shown anywhere. */
+  hiddenContext?: string;
+  /** When true, uses local ephemeral state — no shared history with the global chat store. */
+  isolated?: boolean;
 }
 
 const DEFAULT_PLACEHOLDER = 'Ask about your portfolio, IPS drift, BDC covenants…';
@@ -28,15 +34,62 @@ export function AdvisorChat({
   onExport,
   onOpenInMainView,
   floatingTitle = 'Portfolio Assistant',
+  onClose,
+  hiddenContext = '',
+  isolated = false,
 }: AdvisorChatProps) {
+  // Isolated mode: local ephemeral messages, no shared store.
+  const localMessagesRef = useRef<Message[]>([]);
+  const [localMessages, setLocalMessages] = useState<Message[]>([]);
+
+  const localOps = useRef<ChatOps>({
+    ensureConvId: () => 'isolated',
+    appendMessage: (_, msg) => {
+      localMessagesRef.current = [...localMessagesRef.current, msg];
+      setLocalMessages([...localMessagesRef.current]);
+    },
+    updateLastAssistant: (_, content) => {
+      const msgs = [...localMessagesRef.current];
+      const last = msgs.length - 1;
+      if (last >= 0 && msgs[last].role === 'assistant') {
+        msgs[last] = { ...msgs[last], content };
+        localMessagesRef.current = msgs;
+        setLocalMessages([...msgs]);
+      }
+    },
+    getMessages: () => localMessagesRef.current,
+  }).current;
+
   const { activeConversation } = useChatStore();
-  const { send, stop, isStreaming, traceStatus } = useMasChat();
+  const { pendingPrompt, clearPendingPrompt } = useUiStore();
+  const { send, stop, isStreaming, traceStatus } = useMasChat(isolated ? localOps : undefined);
+
+  const allMessages = isolated ? localMessages : (activeConversation?.messages ?? []);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
+  // Hidden context for the current pre-filled question — never rendered anywhere.
+  const hiddenContextRef = useRef('');
+
+  // Global store: pre-fill from queueMessage() calls.
+  useEffect(() => {
+    if (pendingPrompt) {
+      setInput(pendingPrompt.display);
+      hiddenContextRef.current = pendingPrompt.hidden;
+      clearPendingPrompt();
+      textareaRef.current?.focus();
+    }
+  }, [pendingPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep hiddenContextRef in sync with the prop so chips and manual sends both pick it up.
+  useEffect(() => {
+    hiddenContextRef.current = hiddenContext;
+  }, [hiddenContext]);
 
   const [input, setInput] = useState('');
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const allMessages = activeConversation?.messages ?? [];
+  // allMessages defined above (isolated vs global)
   // While streaming, hide the in-progress assistant bubble — show only the
   // spinner until the full response is ready.
   const lastIsStreamingAssistant =
@@ -84,7 +137,9 @@ export function AdvisorChat({
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
     setInput('');
-    void send(trimmed);
+    const hidden = hiddenContextRef.current;
+    hiddenContextRef.current = '';
+    void send(hidden ? `${trimmed} ${hidden}` : trimmed);
   }
 
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -123,7 +178,10 @@ export function AdvisorChat({
         <PromptChips
           primary={primaryChips}
           secondary={secondaryChips}
-          onSelect={(p) => void send(p)}
+          onSelect={(p) => {
+            const ctx = hiddenContextRef.current;
+            void send(ctx ? `${p} ${ctx}` : p);
+          }}
           layout={isFloating ? 'wrap' : 'stack'}
         />
       )}
@@ -135,7 +193,7 @@ export function AdvisorChat({
       {messages.map((m, i) => (
         // Messages append-only within a conversation; index is a stable key here.
         // eslint-disable-next-line react/no-array-index-key
-        <MessageBubble key={`${activeConversation?.id ?? 'none'}-${i}`} message={m} />
+        <MessageBubble key={`${isolated ? 'isolated' : (activeConversation?.id ?? 'none')}-${i}`} message={m} />
       ))}
       {showStreamingDots && (
         <div className="flex items-center gap-2 text-sm text-muted-foreground transition-opacity">
@@ -197,11 +255,20 @@ export function AdvisorChat({
               </button>
             )}
             <button
-              onClick={() => newConversation()}
+              onClick={() => {
+                if (isolated) {
+                  localMessagesRef.current = [];
+                  setLocalMessages([]);
+                } else if (activeConversation) {
+                  clearConversation(activeConversation.id);
+                } else {
+                  newConversation();
+                }
+              }}
               className="p-1 rounded hover:bg-muted hover:text-foreground"
-              title="New chat"
+              title="Reset chat"
             >
-              <Plus size={13} />
+              <RotateCcw size={12} />
             </button>
             {onOpenInMainView && (
               <button
@@ -210,6 +277,15 @@ export function AdvisorChat({
                 title="Open in main view"
               >
                 <Maximize2 size={12} />
+              </button>
+            )}
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-1 rounded hover:bg-muted hover:text-foreground"
+                title="Close"
+              >
+                <X size={13} />
               </button>
             )}
           </div>
@@ -238,6 +314,14 @@ export function AdvisorChat({
             {activeConversation.title}
           </div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => activeConversation && clearConversation(activeConversation.id)}
+              className="flex items-center gap-1.5 text-xs text-[#0E1928] hover:text-[#1a2a3e] border border-[#0E1928]/20 hover:border-[#0E1928]/40 rounded-md px-2.5 py-1 transition-colors"
+              title="Reset chat"
+            >
+              <RotateCcw size={12} />
+              Reset
+            </button>
             {canForceRefresh && (
               <button
                 onClick={handleForceRefresh}
