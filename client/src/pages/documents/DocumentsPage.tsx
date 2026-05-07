@@ -12,7 +12,7 @@ interface HoldingItem {
   name: string;
   asset_class: string;
   strategy: string;
-  aum_millions: number;
+  aum: number;
 }
 
 interface InsightRow {
@@ -264,13 +264,30 @@ function SectionToneBar({ row }: { row: ToneRow }) {
   );
 }
 
+function ExpandableNote({ text, maxLength = 120 }: { text: string; maxLength?: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const truncated = text.length > maxLength;
+  return (
+    <span className="text-[10px] text-muted-foreground italic">
+      {truncated && !expanded ? `${text.slice(0, maxLength).trimEnd()}…` : text}
+      {truncated && (
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="ml-1 text-[10px] font-medium text-foreground/60 hover:text-foreground underline underline-offset-2 not-italic"
+        >
+          {expanded ? 'less' : 'more'}
+        </button>
+      )}
+    </span>
+  );
+}
+
 function ManagementTonePanel({ rows, loading, error }: { rows: ToneRow[]; loading: boolean; error: string | null }) {
   if (loading) return <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>;
   if (error) return <p className="text-xs text-red-500">{error}</p>;
   if (!rows.length) return <p className="text-xs text-muted-foreground">No tone data available for this holding.</p>;
 
   const sections = rows.filter((r) => r.section !== 'Delta');
-  const delta    = rows.find((r) => r.section === 'Delta');
 
   return (
     <div className="space-y-4">
@@ -285,19 +302,6 @@ function ManagementTonePanel({ rows, loading, error }: { rows: ToneRow[]; loadin
       <div className="space-y-4">
         {sections.map((row) => <SectionToneBar key={row.section} row={row} />)}
       </div>
-
-      {/* Delta row */}
-      {delta && (
-        <div className="pt-3 border-t space-y-1.5">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">vs Prior Call{rows[0]?.prior_quarter_label ? ` (${rows[0].prior_quarter_label})` : ''}</p>
-            <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize ${SENTIMENT_BADGE[delta.sentiment] ?? ''}`}>
-              {SENTIMENT_ICON[delta.sentiment]} {delta.sentiment}
-            </span>
-          </div>
-          <p className="text-[11px] text-muted-foreground italic leading-snug">{delta.section_note}</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -319,14 +323,22 @@ export function DocumentsPage() {
     setStrategyFilter(searchParams.get('strategy') ?? '');
   }, [searchParams.get('asset_class'), searchParams.get('strategy')]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-select first matching holding once list loads (or when filters change)
+  // Auto-select holding once list loads. Priority: ?holding param > filter-driven first match > Adobe default > list[0]
   useEffect(() => {
-    const urlHolding = searchParams.get('holding');
+    const urlHolding    = searchParams.get('holding');
+    const urlAssetClass = searchParams.get('asset_class');
+    const urlStrategy   = searchParams.get('strategy');
+
     if (urlHolding && urlHolding !== selectedId) {
       setSelectedId(urlHolding);
     } else if (!selectedId && holdingsList && (holdingsList as unknown[]).length > 0) {
-      const first = (holdingsList as Array<{ holding_id: string }>)[0];
-      setSelectedId(first.holding_id);
+      const list = holdingsList as Array<{ holding_id: string; name: string }>;
+      if (!urlAssetClass && !urlStrategy) {
+        const adobe = list.find((h) => h.name.toLowerCase().includes('adobe'));
+        setSelectedId((adobe ?? list[0]).holding_id);
+      } else {
+        setSelectedId(list[0].holding_id);
+      }
     }
   }, [searchParams, holdingsList]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -575,7 +587,27 @@ export function DocumentsPage() {
         {/* Management Tone */}
         <Card className="shadow-sm">
           <CardContent className="pt-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Management Tone — {toneRows.find(r => r.section === 'Overall')?.quarter_label ?? ''} Earnings Call</p>
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Management Tone — {toneRows.find(r => r.section === 'Overall')?.quarter_label ?? ''} Earnings Call
+              </p>
+              {(() => {
+                const delta = toneRows.find(r => r.section === 'Delta');
+                if (!delta) return null;
+                const priorLabel = toneRows[0]?.prior_quarter_label;
+                return (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] text-muted-foreground">
+                      vs {priorLabel ?? 'Prior Call'}
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded border font-medium capitalize ${SENTIMENT_BADGE[delta.sentiment] ?? ''}`}>
+                      {SENTIMENT_ICON[delta.sentiment]}{SENTIMENT_ICON[delta.sentiment] ? ' ' : ''}{delta.sentiment}
+                    </span>
+                    {delta.section_note && <ExpandableNote text={delta.section_note} />}
+                  </div>
+                );
+              })()}
+            </div>
             <ManagementTonePanel rows={toneRows} loading={toneLoading} error={toneError} />
           </CardContent>
         </Card>

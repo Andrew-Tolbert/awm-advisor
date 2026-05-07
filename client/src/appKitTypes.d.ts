@@ -214,7 +214,7 @@ declare module "@databricks/appkit-ui/react" {
           /** @sqlType STRING */
           strategy: string;
           /** @sqlType DOUBLE */
-          aum_millions: number;
+          aum: number;
         }>;
       };
     management_tone: {
@@ -333,7 +333,7 @@ declare module "@databricks/appkit-ui/react" {
           /** @sqlType STRING */
           asset_class: string;
           /** @sqlType DOUBLE */
-          aum_millions: number;
+          aum: number;
           /** @sqlType DOUBLE */
           pct_of_portfolio: number;
           /** @sqlType DOUBLE */

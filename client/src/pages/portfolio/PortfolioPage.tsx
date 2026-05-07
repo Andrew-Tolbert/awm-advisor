@@ -57,7 +57,7 @@ interface Holding {
   holding_id: string;
   name: string;
   asset_class: string;
-  aum_millions: number;
+  aum: number;
   pct_of_portfolio: number;
   ytd_return: number;
 }
@@ -132,7 +132,7 @@ function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
             <tr className="border-b text-xs text-muted-foreground uppercase tracking-wider">
               <th className="text-left py-2 pr-4 font-medium">Name</th>
               <th className="text-left py-2 pr-4 font-medium">Asset Class</th>
-              <th className="text-right py-2 pr-4 font-medium">AUM ($M)</th>
+              <th className="text-right py-2 pr-4 font-medium">AUM</th>
               <th className="text-right py-2 pr-4 font-medium">% Portfolio</th>
               <th className="text-right py-2 pr-4 font-medium">YTD Return</th>
             </tr>
@@ -146,7 +146,13 @@ function HoldingsTable({ data, loading, onRowClick }: HoldingsTableProps) {
               >
                 <td className="py-2.5 pr-4 font-medium text-foreground">{h.name}</td>
                 <td className="py-2.5 pr-4 text-muted-foreground">{h.asset_class}</td>
-                <td className="py-2.5 pr-4 text-right tabular-nums">{Number(h.aum_millions).toFixed(1)}</td>
+                <td className="py-2.5 pr-4 text-right tabular-nums">{(() => {
+                  const v = Number(h.aum);
+                  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+                  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+                  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+                  return `$${v.toFixed(0)}`;
+                })()}</td>
                 <td className="py-2.5 pr-4 text-right tabular-nums">{Number(h.pct_of_portfolio).toFixed(1)}%</td>
                 <td className={`py-2.5 pr-4 text-right tabular-nums ${Number(h.ytd_return) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
                   {Number(h.ytd_return) >= 0 ? '+' : ''}{Number(h.ytd_return).toFixed(1)}%
@@ -369,8 +375,31 @@ export function PortfolioPage() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Asset Allocation</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <DonutChart data={(allocationData ?? []) as Record<string, unknown>[]} />
+          <CardContent className="space-y-3 pr-10">
+            <DonutChart
+              data={
+                (allocationData ?? []).map((row) => {
+                  const r = row as Record<string, unknown>;
+                  const colorMap: Record<string, string> = {
+                    'Equity':         '#3b82f6',
+                    'Fixed Income':   '#14b8a6',
+                    'Alternatives':   '#a855f7',
+                    'Private Credit': '#f59e0b',
+                    'Commodities':    '#f97316',
+                  };
+                  return {
+                    ...r,
+                    itemStyle: {
+                      color: colorMap[r.asset_class as string] ?? '#94a3b8',
+                      borderWidth: 2,
+                      borderColor: '#ffffff',
+                    },
+                  };
+                })
+              }
+              showLegend={false}
+              height={260}
+            />
             {/* Clickable legend — each chip navigates to Documents filtered by asset class */}
             <div className="flex flex-wrap gap-1.5 pt-1">
               {((allocationData ?? []) as Array<{ asset_class: string; pct_of_portfolio: number }>).map((row) => {
@@ -396,12 +425,70 @@ export function PortfolioPage() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-2 shadow-sm">
-          <CardHeader className="pb-2">
+        <Card className="col-span-2 shadow-sm overflow-hidden">
+          <CardHeader className="pb-0 pt-4 px-4">
             <CardTitle className="text-sm font-semibold">Performance vs Benchmark — Daily (%)</CardTitle>
           </CardHeader>
-          <CardContent>
-            <AreaChart queryKey="performance_timeseries" parameters={advisorParams} />
+          <CardContent className="p-0">
+            <AreaChart
+              queryKey="performance_timeseries"
+              parameters={advisorParams}
+              height={420}
+              showLegend
+              smooth
+              xKey="date"
+              colors={['#1a3a5c', '#94a3b8']}
+
+              options={{
+                grid: { top: 36, right: 24, bottom: 36, left: 8, containLabel: true },
+                xAxis: {
+                  type: 'time',
+                  boundaryGap: false,
+                  axisLine: { lineStyle: { color: '#e2e8f0' } },
+                  axisTick: { show: false },
+                  splitLine: { show: false },
+                  axisLabel: {
+                    color: '#94a3b8',
+                    fontSize: 10,
+                    margin: 10,
+                    formatter: (val: number) => {
+                      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                      const d = new Date(val);
+                      return `${MONTHS[d.getUTCMonth()]} '${String(d.getUTCFullYear()).slice(2)}`;
+                    },
+                  },
+                },
+                yAxis: {
+                  axisLabel: {
+                    formatter: (v: number) => `${v >= 0 ? '+' : ''}${Number(v).toFixed(1)}%`,
+                    color: '#94a3b8',
+                    fontSize: 10,
+                  },
+                  splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+                  axisLine: { show: false },
+                  axisTick: { show: false },
+                },
+                tooltip: {
+                  trigger: 'axis',
+                  axisPointer: {
+                    type: 'cross',
+                    lineStyle: { color: '#1a3a5c', width: 1, type: 'dashed' },
+                    crossStyle: { color: '#1a3a5c', width: 1 },
+                    label: { backgroundColor: '#1a3a5c' },
+                  },
+                  backgroundColor: 'rgba(255,255,255,0.96)',
+                  borderColor: '#e2e8f0',
+                  textStyle: { color: '#1e293b', fontSize: 12 },
+                },
+                legend: {
+                  top: 12,
+                  right: 24,
+                  textStyle: { color: '#64748b', fontSize: 11 },
+                  itemWidth: 20,
+                  itemHeight: 3,
+                },
+              }}
+            />
           </CardContent>
         </Card>
       </div>
