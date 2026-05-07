@@ -1,5 +1,4 @@
 SELECT
-  now(),
   holding_id,
   section,
   section_order,

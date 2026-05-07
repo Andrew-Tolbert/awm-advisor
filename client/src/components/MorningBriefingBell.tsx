@@ -237,7 +237,7 @@ function SectionCard({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-wider text-white/55 font-semibold">
-            <span>Section {row.section_id + 1}</span>
+            <span>Section {Number(row.section_id) + 1}</span>
             <span aria-hidden>·</span>
             <span style={{ color: sev.iconText }}>{sev.label}</span>
           </div>
