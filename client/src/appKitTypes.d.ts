@@ -221,8 +221,6 @@ declare module "@databricks/appkit-ui/react" {
         name: "management_tone";
         parameters: Record<string, never>;
         result: Array<{
-          /** @sqlType TIMESTAMP */
-          "now()": string;
           /** @sqlType STRING */
           holding_id: string;
           /** @sqlType STRING */
