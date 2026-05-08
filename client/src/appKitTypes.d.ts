@@ -74,6 +74,19 @@ declare module "@databricks/appkit-ui/react" {
           initials: string;
         }>;
       };
+    alert_citations: {
+        name: "alert_citations";
+        parameters: {
+          /** STRING - use sql.string() */
+          signal_id: SQLStringMarker;
+        };
+        result: Array<{
+          /** @sqlType STRING */
+          doc_name: string;
+          /** @sqlType STRING */
+          snippet: string;
+        }>;
+      };
     alerts: {
         name: "alerts";
         parameters: {
@@ -191,6 +204,17 @@ declare module "@databricks/appkit-ui/react" {
           delta_pct: number;
         }>;
       };
+    holding_documents: {
+        name: "holding_documents";
+        parameters: {
+          /** STRING - use sql.string() */
+          symbol: SQLStringMarker;
+        };
+        result: Array<{
+          /** @sqlType STRING */
+          doc_name: string;
+        }>;
+      };
     holdings_list: {
         name: "holdings_list";
         parameters: {
@@ -216,6 +240,8 @@ declare module "@databricks/appkit-ui/react" {
         result: Array<{
           /** @sqlType STRING */
           holding_id: string;
+          /** @sqlType STRING */
+          source_type: string;
           /** @sqlType STRING */
           section: string;
           /** @sqlType INT */

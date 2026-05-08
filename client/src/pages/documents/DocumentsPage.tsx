@@ -31,6 +31,7 @@ interface InsightRow {
 
 interface ToneRow {
   holding_id: string;
+  source_type: string;
   section: string;
   section_order: number;
   positive_pct: number | null;
@@ -46,17 +47,27 @@ interface ToneRow {
   source_description: string;
 }
 
+const DOC_TYPE_LABELS: Record<string, string> = {
+  earnings_transcript: 'Earnings Call',
+  'sec_filing_10-K':   '10-K',
+  'sec_filing_10-Q':   '10-Q',
+  'sec_filing_8-K':    '8-K',
+};
+const DOC_TYPE_ORDER = ['earnings_transcript', 'sec_filing_10-K', 'sec_filing_10-Q', 'sec_filing_8-K'];
+
 interface CitationRow {
   label: string;
   snippet: string;
 }
 
-const DOCUMENTS = [
-  { icon: '📄', label: '10-K 2025' },
-  { icon: '📄', label: 'Q3 Earnings Transcript' },
-  { icon: '📄', label: 'CIM 2024' },
-  { icon: '📄', label: 'Covenant Compliance Report' },
-];
+interface AlertCitationRow {
+  doc_name: string;
+  snippet: string;
+}
+
+interface HoldingDocRow {
+  doc_name: string;
+}
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -324,6 +335,7 @@ export function DocumentsPage() {
   const [selectedId, setSelectedId] = useState<string>(searchParams.get('holding') ?? '');
   const [assetClassFilter, setAssetClassFilter] = useState<string>(searchParams.get('asset_class') ?? '');
   const [strategyFilter, setStrategyFilter]     = useState<string>(searchParams.get('strategy') ?? '');
+  const [selectedDocType, setSelectedDocType]   = useState<string>('earnings_transcript');
 
   const { params: advisorParams } = useAdvisor();
   const { data: holdingsList, loading: listLoading } = useAnalyticsQuery('holdings_list', advisorParams);
@@ -358,8 +370,13 @@ export function DocumentsPage() {
     [selectedId],
   );
   const queryOpts = { autoStart: !!selectedId };
-  const { data: insights,  loading: insightsLoading } = useAnalyticsQuery('company_fundamentals', insightParams, queryOpts);
-  const { data: citesData, loading: citesLoading }    = useAnalyticsQuery('source_citations',     insightParams, queryOpts);
+  const docsParams = useMemo(
+    () => selectedId ? { symbol: sql.string(selectedId) } : undefined,
+    [selectedId],
+  );
+  const { data: insights,    loading: insightsLoading } = useAnalyticsQuery('company_fundamentals', insightParams, queryOpts);
+  const { data: citesData,   loading: citesLoading }    = useAnalyticsQuery('source_citations',     insightParams, queryOpts);
+  const { data: holdingDocs, loading: docsLoading }     = useAnalyticsQuery('holding_documents',    docsParams,    queryOpts);
 
   // Load all management tone rows once — filter client-side by selectedId
   const { data: allToneData, loading: toneLoading, error: toneError } = useAnalyticsQuery('management_tone');
@@ -367,8 +384,10 @@ export function DocumentsPage() {
 
   const holdings = (holdingsList ?? []) as HoldingItem[];
   const rows     = (insights   ?? []) as InsightRow[];
-  const toneRows = ((allToneData ?? []) as ToneRow[]).filter((r) => r.holding_id === selectedId);
-  const citations = (citesData ?? []) as CitationRow[];
+  const allHoldingToneRows = ((allToneData ?? []) as ToneRow[]).filter((r) => r.holding_id === selectedId);
+  const toneRows = allHoldingToneRows.filter((r) => r.source_type === selectedDocType);
+  const citations = (citesData   ?? []) as CitationRow[];
+  const documents = (holdingDocs ?? []) as HoldingDocRow[];
 
   const selectedHolding = holdings.find((h) => h.holding_id === selectedId);
   const covenantRow = rows.find((r) => r.kpi_name === 'Covenant Headroom');
@@ -384,6 +403,22 @@ export function DocumentsPage() {
     const rows = (alertsData ?? []) as unknown as AlertSignalRow[];
     return rows.find((r) => r.symbol === selectedId) ?? null;
   }, [alertsData, selectedId]);
+
+  // Reset to earnings call whenever the holding changes
+  useEffect(() => { setSelectedDocType('earnings_transcript'); }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const availableDocTypes = useMemo(() => {
+    const types = new Set(allHoldingToneRows.map((r) => r.source_type));
+    return DOC_TYPE_ORDER.filter((t) => types.has(t));
+  }, [allHoldingToneRows]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const alertCiteParams = useMemo(
+    () => selectedAlert ? { signal_id: sql.string(selectedAlert.signal_id) } : undefined,
+    [selectedAlert],
+  );
+  const alertCiteOpts = { autoStart: !!selectedAlert };
+  const { data: alertCitesData, loading: alertCitesLoading } = useAnalyticsQuery('alert_citations', alertCiteParams, alertCiteOpts);
+  const alertCitations = (alertCitesData ?? []) as AlertCitationRow[];
 
   const assetClasses = useMemo(() => [...new Set(holdings.map((h) => h.asset_class))].sort(), [holdings]);
   const strategies   = useMemo(() => {
@@ -485,12 +520,22 @@ export function DocumentsPage() {
           <div className="px-4 py-3 border-b">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Documents</p>
           </div>
-          {DOCUMENTS.map((d) => (
-            <div key={d.label} className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer transition-colors">
-              <FileText className="w-3.5 h-3.5 flex-shrink-0" />
-              {d.label}
-            </div>
-          ))}
+          {docsLoading
+            ? Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="px-4 py-2.5 border-b last:border-0">
+                  <Skeleton className="h-3 w-full" />
+                </div>
+              ))
+            : documents.map((d) => (
+                <div
+                  key={d.doc_name}
+                  className="flex items-start gap-2 px-4 py-2.5 border-b last:border-0 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 cursor-pointer transition-colors"
+                >
+                  <FileText className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                  <span className="leading-snug">{d.doc_name}</span>
+                </div>
+              ))
+          }
         </div>
       </div>
 
@@ -603,14 +648,39 @@ export function DocumentsPage() {
         {/* Management Tone */}
         <Card className="shadow-sm">
           <CardContent className="pt-4 space-y-3">
-            <div className="space-y-1.5">
+            <div className="space-y-2">
+              {/* Header */}
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Management Tone — {toneRows.find(r => r.section === 'Overall')?.quarter_label ?? ''} Earnings Call
+                {selectedDocType === 'earnings_transcript'
+                  ? `Management Tone — ${toneRows.find((r) => r.section === 'Overall')?.quarter_label ?? ''} Earnings Call`
+                  : `Management Tone — ${toneRows.find((r) => r.section === 'Overall')?.quarter_label ?? ''} ${DOC_TYPE_LABELS[selectedDocType] ?? ''}`
+                }
               </p>
-              {(() => {
-                const delta = toneRows.find(r => r.section === 'Delta');
+
+              {/* Doc-type selector — only show when multiple types have data */}
+              {availableDocTypes.length > 1 && (
+                <div className="flex gap-1 flex-wrap">
+                  {availableDocTypes.map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setSelectedDocType(type)}
+                      className={`text-[10px] px-2 py-0.5 rounded border font-medium transition-colors ${
+                        selectedDocType === type
+                          ? 'bg-[#1a3a5c] text-white border-[#1a3a5c]'
+                          : 'text-muted-foreground border-border hover:border-[#1a3a5c]/40 hover:text-foreground'
+                      }`}
+                    >
+                      {DOC_TYPE_LABELS[type]}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Delta summary — earnings call only */}
+              {selectedDocType === 'earnings_transcript' && (() => {
+                const delta = toneRows.find((r) => r.section === 'Delta');
                 if (!delta) return null;
-                const priorLabel = toneRows[0]?.prior_quarter_label;
+                const priorLabel = delta.prior_quarter_label;
                 return (
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[10px] text-muted-foreground">
@@ -628,28 +698,56 @@ export function DocumentsPage() {
           </CardContent>
         </Card>
 
-        {/* Source Citations */}
-        <Card className="shadow-sm">
-          <CardContent className="pt-4 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Source Citations</p>
-            {citesLoading ? (
-              <div className="space-y-3">
-                {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+        {/* Source Citations — alert-specific when an alert is active, generic otherwise */}
+        {selectedAlert ? (
+          <Card className="shadow-sm">
+            <CardContent className="pt-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Source Citations</p>
+                <span className="text-[10px] px-1.5 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-700 font-medium">Alert</span>
               </div>
-            ) : (
-              <div className="space-y-3">
-                {citations.map((c) => (
-                  <div key={c.label} className="space-y-1">
-                    <span className="inline-block text-xs px-2 py-0.5 rounded-full border border-[#1a3a5c]/30 text-[#1a3a5c] bg-[#1a3a5c]/5 font-medium cursor-pointer hover:bg-[#1a3a5c]/10 transition-colors">
-                      {c.label}
-                    </span>
-                    <p className="text-xs text-muted-foreground italic leading-relaxed pl-1">{c.snippet}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              {alertCitesLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}
+                </div>
+              ) : alertCitations.length === 0 ? null : (
+                <div className="space-y-4">
+                  {alertCitations.map((c, i) => (
+                    <div key={i} className="space-y-1.5 border-l-2 border-amber-300 pl-3">
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="w-3 h-3 text-amber-600 flex-shrink-0" />
+                        <span className="text-xs font-semibold text-amber-800">{c.doc_name}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground italic leading-relaxed">{c.snippet}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="shadow-sm">
+            <CardContent className="pt-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Source Citations</p>
+              {citesLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {citations.map((c) => (
+                    <div key={c.label} className="space-y-1">
+                      <span className="inline-block text-xs px-2 py-0.5 rounded-full border border-[#1a3a5c]/30 text-[#1a3a5c] bg-[#1a3a5c]/5 font-medium cursor-pointer hover:bg-[#1a3a5c]/10 transition-colors">
+                        {c.label}
+                      </span>
+                      <p className="text-xs text-muted-foreground italic leading-relaxed pl-1">{c.snippet}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

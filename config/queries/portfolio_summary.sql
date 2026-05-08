@@ -1,6 +1,6 @@
 SELECT
   total_aum,
-  perf_vs_bench_pct,
+  -perf_vs_bench_pct AS perf_vs_bench_pct,
   drift_count,
   clients_at_risk,
   qtd_aum_change
