@@ -10,7 +10,8 @@
 
 ### Wireframe
 - [x] Sidebar navigation — GS identity, 4 nav links, active left-border style, advisor picker dropdown
-- [x] **Sidebar updated to 5 nav links** — add Drift Analysis as second item
+- [x] **Sidebar updated to 6 nav links** — Drift Analysis (2nd), Tech Stack (6th)
+- [x] **Morning Briefing Bell** — `MorningBriefingBell` component in sidebar header; notification bell with badge count; sections expand with markdown-rendered content; severity-coded stripes (Action/Watch/FYI)
 - [x] Page 1: Portfolio Intelligence Dashboard
   - [x] 4 KPI stat cards (AUM, Perf vs Benchmark, Allocation Drift, Clients at Risk)
   - [x] Allocation Drift KPI card links to `/drift` instead of being static
@@ -18,20 +19,20 @@
   - [x] Asset Allocation donut chart (`asset_allocation.sql`)
   - [x] Performance vs Benchmark area chart (`performance_timeseries.sql`)
   - [x] Top 10 Holdings table with risk badges, clickable rows → `/documents`
-  - [x] Active Alerts feed — covenant alert → `/agents`, drift alert → `/drift`
-  - [x] Client Concentration Risk heatmap (`concentration_risk.sql`)
+  - [x] Active Alerts feed — **live from `alerts.sql`**; severity-sorted; links to `/agents?signal_id=<id>` or `/drift`
+  - [x] Client Concentration Risk heatmap — now **asset class × risk profile** grouping (not client × asset class)
 - [x] Page 2: Drift Analysis (`/drift`) — **BUILT**
   - [x] Advisor-level summary bar: total accounts drifting, total clients at risk, worst asset class
   - [x] Client drift table — one row per client, sorted by drift score; columns: client name, AUM, # breaches, worst asset class, drift score badge
   - [x] Account drill-down panel — clicking a client expands per-account, per-asset-class drift rows with IPS band and actual vs target delta
   - [x] URL param sync (`?client=<id>`) to deep-link from Portfolio page alerts
 - [x] Page 3: Document Intelligence
-  - [x] Left panel: holdings list with asset-class badges and alert dot
-  - [x] Left panel: document list (10-K, Earnings, CIM, Covenant)
+  - [x] Left panel: holdings list with asset-class badges
+  - [x] Left panel: document list — **live from `holding_documents.sql`** against `gold_app_documents`; ordered by source type
   - [x] KPI delta table with flag indicators
   - [x] Covenant health gauge with APPROACHING BREACH warning
-  - [x] Management tone stacked bar
-  - [x] Source citations with quoted snippets
+  - [x] Management tone stacked bar — **extended to section-level** (by earnings quarter + source type)
+  - [x] Source citations — **two sources**: mock `source_citations.sql` CTE + live `alert_citations.sql` keyed by `signal_id`; alert citations surface doc-specific snippets when an alert is active
   - [x] URL param sync (`?holding=<id>`) from Portfolio page
 - [x] Page 4: Agent Orchestration
   - [x] Proactive alert banner with pulsing red dot
@@ -43,24 +44,30 @@
   - [x] Re-allocation scenario card
   - [x] Audit trail footer
 - [x] Page 5: Genie Chat — full-width embed (removed max-w constraint)
+- [x] Page 6: Tech Stack (`/tech-stack`) — **NEW** — card grid linking to Lakeflow Jobs, Agent Bricks (Supervisor + Knowledge Assistant), MLflow Traces, Genie Space, Unity Catalog Lineage; each card has deep-link to the actual Databricks workspace resource
+- [x] **Portfolio Assistant (embedded chat)** — `PortfolioAssistant` component; streaming Claude chat via `/api/portfolio-chat`; pre-cached responses for prompt chips (no model call on chip click); full chat history; PDF export; `prefab-prompts.ts` cache file
 
 ### Phase 2: Data & SQL
-- [x] `portfolio_summary.sql`
+- [x] `portfolio_summary.sql` — extended with `qtd_aum_change` column
 - [x] `asset_allocation.sql`
 - [x] `performance_timeseries.sql` — **daily** (not monthly); queries `gold_app_performance_timeseries`
 - [x] `top_holdings.sql`
-- [x] `concentration_risk.sql`
+- [x] `concentration_risk.sql` — schema changed: now groups by `asset_class × risk_profile` (not client × asset class); returns `delta_pct` only
 - [x] `advisors.sql` — new; populates sidebar advisor picker
-- [x] `holdings_list.sql`
+- [x] `holdings_list.sql` — `has_alert` removed, `aum` added; left panel uses alert dot from `alerts` query now
 - [x] ~~`document_insights.sql`~~ — **deleted**; superseded by `company_fundamentals.sql`
 - [x] ~~`hello_world.sql`~~ — **deleted**; unused scaffold
 - [x] `company_fundamentals.sql` — Live against `gold_app_company_fundamentals`; 10 KPIs per holding; card only renders when holding selected; flag drives color
-- [x] `management_tone.sql` — Live against `gold_app_management_tone`
-- [x] `source_citations.sql` — Still mock CTE; real source migration (`vs_sec_filings` + `vs_signals`) not needed for demo
+- [x] `management_tone.sql` — Live against `gold_app_management_tone`; extended to section-level breakdown: `section`, `section_order`, `section_note`, `earnings_date`, `year`, `quarter`, `quarter_label`, `prior_quarter_label`, `source_description`
+- [x] `source_citations.sql` — Mock CTE keyed by `holding_id`; returns `label` + `snippet`
 - [x] `account_drift.sql` — Live against `gold_account_ips_drift`; all dollar + drift columns
 - [ ] `drift_summary.sql` — computed client-side in DriftPage
 - [ ] `client_drift.sql` — computed client-side in DriftPage
 - [x] `client_communications.sql` — **NEW.** Live against `ahtsa.awm.app_client_communications`; filtered by `advisor_id` + `signal_id`; joins `clients` for AUM; powers Agent Orchestration page
+- [x] `alerts.sql` — **NEW.** Live against `ahtsa.awm.gold_app_alerts` + LEFT JOIN `gold_unified_signals` (for full rationale); filtered by `advisor_id`; sorted by `severity_score` desc; powers Active Alerts feed on Portfolio page
+- [x] `alert_citations.sql` — **NEW.** Mock CTE keyed by ticker symbol (TCPC, FSK, UNH, ADBE, AMT), joined to `gold_app_alerts` by `signal_id`; returns `doc_name` + `snippet`; powers source citations in Document Intelligence when an alert is active
+- [x] `morning_briefings.sql` — **NEW.** Live against `ahtsa.awm.app_morning_briefings`; latest `briefing_date` + `advisor_id`; sections 0–9 deduped by `ROW_NUMBER()`; powers Morning Briefing Bell
+- [x] `holding_documents.sql` — **NEW.** Live against `ahtsa.awm.gold_app_documents`; filtered by `symbol`; ordered by `source_type` priority (10-K → earnings → 8-K → 10-Q → BDC); powers document list in Document Intelligence left panel
 
 #### Gold App Tables — `ahtsa.awm`
 
@@ -72,8 +79,11 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 | `gold_app_asset_allocation` | `holdings → accounts → clients` | Window SUM partitioned by `advisor_id` |
 | `gold_app_performance_timeseries` | `silver_advisor_daily_returns` | All trading days (daily); no month-end aggregation |
 | `gold_app_top_holdings` | `holdings`, `bronze_historical_prices`, `gold_unified_signals`, `bronze_company_profiles` | Top-10 per advisor; risk_flag from last-30-day signals |
-| `gold_app_concentration_risk` | `gold_ips_drift`, `clients` | Top-5 clients by AUM per advisor — kept for Portfolio heatmap; Drift page uses account_drift |
+| `gold_app_concentration_risk` | `gold_ips_drift`, `clients` | Now groups by `asset_class × risk_profile` (not client × asset class) — heatmap shows drift by profile bucket |
 | `gold_app_company_fundamentals` ✅ | `gold_financial_fundamentals` + `holdings` | **NEW.** 10 KPI rows per holding (EBITDA, Leverage, RevGrowth, IntCoverage, ND/EBITDA, EPS, EBITDA Margin, Net Margin, ROE, FCF). Prior vs current period, formatted display strings, flag ('up'/'down'/'alert'), `LATERAL VIEW INLINE` unpivot. All holdings in portfolio; is_etf=false. |
+| `gold_app_alerts` ✅ | `gold_unified_signals` + `holdings` + `clients` | **NEW.** One row per signal per advisor; `signal_id`, `symbol`, `company_name`, `signal_date`, `source_type`, `signal_type`, `signal`, `signal_value`, `sentiment`, `severity_score`, `advisor_action_needed`, `total_exposure`, `rationale` (truncated to 400 chars — full rationale fetched via JOIN in `alerts.sql`) |
+| `gold_app_documents` ✅ | `vs_sec_filings` + `bronze_earnings_transcripts` | **NEW.** One row per document per symbol; `symbol`, `doc_name`, `source_type`; ordered by source type priority in `holding_documents.sql` |
+| `app_morning_briefings` ✅ | Agent pipeline output | **NEW.** Section-based morning briefing content per advisor per day; `section_id`, `section_key`, `section_name`, `content` (markdown), `status`, `generated_at`, `briefing_date`, `advisor_id` |
 
 **New tables needed for Drift Analysis page:**
 
@@ -132,7 +142,7 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 | `asset_allocation.sql` | Portfolio — Asset Allocation donut chart | ✅ Live — queries `gold_app_asset_allocation WHERE advisor_id = :advisor_id` |
 | `performance_timeseries.sql` | Portfolio — Performance vs Benchmark (daily) | ✅ Live — queries `gold_app_performance_timeseries WHERE advisor_id = :advisor_id` |
 | `top_holdings.sql` | Portfolio — Top 10 Holdings table | ✅ Live — queries `gold_app_top_holdings WHERE advisor_id = :advisor_id` |
-| `concentration_risk.sql` | Portfolio — Drift heatmap (asset class × risk profile) | ✅ Live — queries `gold_account_ips_drift`, weighted avg `drift_from_target_pct` by account value |
+| `concentration_risk.sql` | Portfolio — Concentration heatmap (asset class × risk profile) | ✅ Live — queries `gold_app_concentration_risk`; schema now groups by `asset_class × risk_profile` |
 | `advisors.sql` | Sidebar — advisor picker dropdown | ✅ Live — queries `ahtsa.awm.advisors ORDER BY rank_order` |
 | `holdings_list.sql` | Documents — left-panel holdings selector | ✅ Live — queries `gold_app_holdings_list WHERE advisor_id = :advisor_id` |
 | `company_fundamentals.sql` | Documents — Key Metrics KPI table (`:holding_id` param) | ✅ Live — queries `gold_app_company_fundamentals WHERE symbol = :holding_id`; card hidden until holding selected; flag drives color (not raw sign) |
@@ -143,6 +153,10 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 | `drift_summary.sql` | Drift — advisor KPI bar | ☐ Computed client-side in `DriftPage.tsx` |
 | `client_drift.sql` | Drift — client-level breach table | ☐ Computed client-side in `DriftPage.tsx` |
 | `client_communications.sql` | Agents — affected clients + draft emails | ✅ Live — `ahtsa.awm.app_client_communications`; filtered by `advisor_id` + `signal_id`; joins `clients` for AUM |
+| `alerts.sql` | Portfolio — Active Alerts feed | ✅ Live — `gold_app_alerts` + JOIN `gold_unified_signals`; sorted by severity |
+| `alert_citations.sql` | Documents — alert-linked source citations | ✅ Mock CTE — ticker-keyed snippets (TCPC, FSK, UNH, ADBE, AMT); joins `gold_app_alerts` by `signal_id` |
+| `morning_briefings.sql` | Sidebar — Morning Briefing Bell | ✅ Live — `app_morning_briefings`; latest briefing date per advisor |
+| `holding_documents.sql` | Documents — left panel document list | ✅ Live — `gold_app_documents`; filtered by symbol; ordered by source type |
 
 ### Phase 2.5: Advisor Context & Filtering
 - [x] `ahtsa.awm.advisors` table exists with `advisor_id`, `full_name`, `title`, `email`, `rank_order`, initials derivable from `first_name`/`last_name`
@@ -160,6 +174,55 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 - [x] **Markdown rendering** — `marked` parses email drafts; toggle between rendered preview and raw edit (`Pencil`/`Eye`)
 - [ ] Lakebase approval write — Approve & Send shows success state client-side only; no backend write yet (not needed for demo)
 
+### Phase 3.5: Portfolio Assistant (Chat) — **NEW** ✅
+- [x] **`/api/portfolio-chat`** — Express route (`server/routes/portfolio-chat.ts`); streams Claude API responses as SSE; system prompt includes advisor context, portfolio summary, and top holdings
+- [x] **`PortfolioAssistant.tsx`** — floating/docked chat panel; streaming messages; full chat history with `useChatStore` (Zustand)
+- [x] **`PromptChips.tsx`** — pre-defined chip buttons; clicking a chip looks up `prefab-prompts.ts` and renders instantly (no API call); free-typed prompts still hit Claude
+- [x] **`prefab-prompts.ts`** — 3-layer answer cache keyed case-insensitively to prompt text; one cache file per chat surface (`advisor` key); includes pre-baked answers for top-risk, BDC surveillance, and private credit chips
+- [x] **`MessageBubble.tsx`**, **`ChatHistory.tsx`**, **`useMasChat.ts`** — streaming message assembly, history display, MAS-style chat hook
+- [x] **`exportChatPdf.ts`** — export full chat transcript as PDF
+
+### Phase 3.6: Morning Briefing Bell — **NEW** ✅
+- [x] **`MorningBriefingBell.tsx`** — bell icon with badge count in sidebar header; notification panel opens on click; sections collapsed by default; expand shows markdown-rendered content; severity-coded left stripe + icon bg (Action=red, Watch=amber, FYI=blue)
+- [x] **`morning_briefings.sql`** — live query; sections 0–9 deduped by latest `generated_at`
+- [x] Section meta config: `executive_summary`, `portfolio_alerts`, `bdc_surveillance`, `credit_events`, `earnings_highlights`, `ai_signals`, `recommended_actions`
+
+### Phase 3.7: Tech Stack Page — **NEW** ✅
+- [x] **`TechStackPage.tsx`** (`/tech-stack`) — card grid with 6 deep-links into the demo workspace: Lakeflow Jobs, Agent Bricks Supervisor, Agent Bricks Knowledge Assistant, MLflow Traces, Genie Space, Unity Catalog Lineage
+- [x] Added as 6th sidebar nav link with `Cpu` icon
+
+### Phase 3.8: Positive Alerts & Alert Strip — **NEW** ✅
+- [x] **Positive alert support (AMT / Guidance Raise)** — `sentiment` field added to `AlertRow` type; `isPositiveSentiment()` helper; banner and pill colors driven dynamically (emerald for positive, red for negative); `'Guidance Raise'` added to `SIGNAL_META` with OPPORTUNITY ALERT copy, AMT-specific detail, and positive agent cascade narrative; `SIGNAL_META_POSITIVE_FALLBACK` for future positive signal types
+- [x] **IPS Drift pill always visible in alert strip** — IPS pill permanent fixture in the alert strip regardless of navigation source; drift row persisted to `sessionStorage` when navigating from DriftPage so the IPS pill can restore drift context at any time; clicking IPS when inactive re-navigates to `/agents` with the stored drift row — no navigation away from the page; signal pills and IPS pill all toggle alert content in-place
+
+### Phase 3.9: Re-Allocation Scenario — Interactive Modeling ☐
+> **Current state:** Card shows static SIGNAL_META copy with a non-functional "Model Scenario" button that navigates to `/`.
+>
+> **Goal:** Make the scenario card genuinely interactive using data that already exists — no new gold tables required. The "wow" here is showing real dollars and IPS compliance impact, not just static percentages.
+
+**Data available without new queries:**
+| Source | What it provides |
+|---|---|
+| `asset_allocation.sql` (add to AgentsPage) | Actual current % per asset class for the advisor — replaces static SIGNAL_META percentages |
+| `portfolio_summary.sql` (add to AgentsPage) | `total_aum` — converts % deltas to dollar trade size estimates |
+| `account_drift.sql` (already queried by DriftPage; add filtered call to AgentsPage) | Per-account drift status per asset class — shows how many accounts the reallocation would bring back into IPS compliance |
+
+**Build steps:**
+
+1. **Enrich with real allocation data** — Add `useAnalyticsQuery('asset_allocation', advisorParams)` and `useAnalyticsQuery('portfolio_summary', advisorParams)` to AgentsPage. Replace static `realloc.from_pct` / `realloc.to_pct` with the live current % for that asset class and the proposed target %. Show the real delta, not the hardcoded one.
+
+2. **Dollar trade estimate** — Compute `Math.abs(actual_pct - proposed_pct) / 100 * total_aum` and display as "$X.XM estimated trade size across N affected clients."
+
+3. **"Model Scenario" toggle** — Button toggles an expanded state on the card (replaces navigate-to-home). Expanded view shows:
+   - Before/after horizontal bar for `from_asset` and `to_asset` (animated width transition, two rows)
+   - Dollar trade estimate
+   - IPS compliance impact: filter `account_drift` results to the `from_asset` class, count accounts currently `Over Band` that would land `Within Band` after the proposed reduction — display as "X of Y over-weight accounts return to IPS band"
+   - A "Close Model" button to collapse back
+
+4. **Confirm Reallocation action** — A secondary "Recommend Reallocation" button inside the expanded view appends a reallocation recommendation block to the active draft communication (modifies `draftText` state directly). This makes the scenario card feel connected to the approval flow.
+
+**Acceptance criteria:** Clicking "Model Scenario" expands the card with real current allocation %, a real dollar trade estimate, and a live IPS compliance impact count. "Recommend Reallocation" appends structured reallocation language to the draft email. No new SQL files or gold tables required.
+
 ### Phase 4: Polish ✅ (demo-ready)
 - [x] GS navy `#1a3a5c` used consistently for accents, borders, and interactive elements
 - [x] Loading states on data-driven sections (`commsLoading` guard in AgentsPage; `Skeleton` in DocumentsPage)
@@ -167,6 +230,13 @@ All Portfolio Intelligence queries are backed by pre-computed `gold_app_*` table
 - [ ] Loading skeletons on Portfolio KPI cards
 - [ ] Error states on `useAnalyticsQuery` calls
 - [ ] Responsive sidebar (icon-only < 1024px) — optional, not needed for demo
+
+### Pre-Demo Cleanup ✅
+- [x] `alerts.sql` — LEFT JOIN `gold_unified_signals` for full rationale (bypasses 400-char truncation in `gold_app_alerts.rationale`)
+- [x] `concentration_risk.sql` schema pivot — was client × asset class; now asset class × risk profile for cleaner heatmap
+- [x] `holdings_list.sql` — dropped `has_alert`; alert indicator driven by `alerts` query result set instead
+- [x] `management_tone.sql` — extended to multi-section / multi-quarter breakdown
+- [x] TypeScript clean — `npx tsc --noEmit` passes
 
 ### Pre-commit Cleanup ✅
 - [x] Deleted `document_insights.sql` and `hello_world.sql` (unused)
@@ -702,59 +772,64 @@ Changes:
 
 ```
 client/src/
-  App.tsx                                    ← rewritten (sidebar layout, 4 routes)
-  index.css                                  ← add GS color vars
+  App.tsx                                    ← rewritten (sidebar layout, 6 routes + MorningBriefingBell + PortfolioAssistant)
+  index.css                                  ← GS color vars
+  appKitTypes.d.ts                           ← auto-generated; all query registry types
+  data/
+    prefab-prompts.ts                        ← pre-cached chat responses (3-layer answer cache)
+  contexts/
+    AdvisorContext.tsx                       ← advisor state, useAdvisor() hook
+  components/
+    MorningBriefingBell.tsx                  ← notification bell (morning_briefings query)
+    PortfolioAssistant.tsx                   ← floating/docked chat panel
+    chat/
+      AdvisorChat.tsx                        ← chat UI shell
+      ChatHistory.tsx                        ← message history list
+      MessageBubble.tsx                      ← individual message with streaming
+      PromptChips.tsx                        ← pre-baked chip buttons
+      exportChatPdf.ts                       ← PDF export
+      types.ts                              ← chat message types
+      useChatStore.ts                        ← Zustand chat state
+      useMasChat.ts                          ← MAS-style streaming hook
   pages/
     portfolio/
-      PortfolioPage.tsx                      ← new (bento dashboard)
-      components/
-        StatCard.tsx                         ← new (KPI card)
-        AssetAllocationChart.tsx             ← new (donut/bar)
-        HoldingsTable.tsx                    ← new (clickable rows)
-        AlertsFeed.tsx                       ← new
+      PortfolioPage.tsx                      ← bento dashboard; uses alerts.sql (live)
     drift/
-      DriftPage.tsx                          ← new (drift analysis, 3-level granularity)
-      components/
-        DriftSummaryBar.tsx                  ← new (advisor KPI cards)
-        ClientDriftTable.tsx                 ← new (sortable, clickable rows)
-        AccountDrillDown.tsx                 ← new (per-account, per-asset-class detail)
+      DriftPage.tsx                          ← drift analysis, 3-level granularity
     documents/
-      DocumentsPage.tsx                      ← new (two-panel)
-      components/
-        HoldingsList.tsx                     ← new (left panel)
-        KpiDeltaTable.tsx                    ← new
-        CovenantGauge.tsx                    ← new
-        ToneBar.tsx                          ← new
-        CitationPanel.tsx                    ← new
+      DocumentsPage.tsx                      ← two-panel; uses holding_documents + alert_citations
     agents/
-      AgentsPage.tsx                         ← new (cascade + approval)
-      components/
-        AlertBanner.tsx                      ← new
-        AgentTimeline.tsx                    ← new
-        ClientPanel.tsx                      ← new
-        DraftCommunication.tsx               ← new
-        ReallocationScenario.tsx             ← new
+      AgentsPage.tsx                         ← cascade + approval; real client comms
     genie/
-      GeniePage.tsx                          ← modified (header + prompt chips)
+      GeniePage.tsx                          ← Genie embed + prompt chips
+    tech-stack/
+      TechStackPage.tsx                      ← NEW (card grid with workspace deep-links)
 
 config/queries/
-  portfolio_summary.sql                      ← live
+  portfolio_summary.sql                      ← live (+ qtd_aum_change)
   asset_allocation.sql                       ← live
   performance_timeseries.sql                 ← live
   top_holdings.sql                           ← live
-  concentration_risk.sql                     ← live
-  holdings_list.sql                          ← live
-  document_insights.sql                      ← superseded (no longer wired)
-  company_fundamentals.sql                   ← live ✅ (gold_app_company_fundamentals)
-  account_drift.sql                          ← live ✅ (gold_account_ips_drift)
+  concentration_risk.sql                     ← live (asset_class × risk_profile schema)
+  advisors.sql                               ← live
+  holdings_list.sql                          ← live (aum replaces has_alert)
+  company_fundamentals.sql                   ← live (gold_app_company_fundamentals)
+  management_tone.sql                        ← live (extended section-level schema)
+  source_citations.sql                       ← mock CTE (holding_id keyed)
+  account_drift.sql                          ← live (gold_account_ips_drift)
+  client_communications.sql                  ← live (app_client_communications)
+  alerts.sql                                 ← NEW live (gold_app_alerts + JOIN gold_unified_signals)
+  alert_citations.sql                        ← NEW mock CTE (ticker-keyed snippets)
+  morning_briefings.sql                      ← NEW live (app_morning_briefings)
+  holding_documents.sql                      ← NEW live (gold_app_documents)
   drift_summary.sql                          ← computed client-side for now
   client_drift.sql                           ← computed client-side for now
 
 server/
-  server.ts                                  ← add agent_runs + client_comms table creation
+  server.ts                                  ← Lakebase table creation on startup
   routes/
-    lakebase/todo-routes.ts                  ← keep (used for audit trail tables)
-    agents/agent-routes.ts                   ← new
+    lakebase/todo-routes.ts                  ← audit trail tables
+    portfolio-chat.ts                        ← NEW streaming Claude API chat endpoint
 ```
 
 ---
@@ -765,11 +840,14 @@ Build in this order — each phase is independently testable:
 
 1. **Phase 1** — Sidebar layout + stub pages (no data yet) ✅
 2. **Phase 2** — Portfolio dashboard (SQL queries + charts) ✅
-3. **Phase 2.5** — Drift Analysis page (3 new gold tables → 3 SQL files → DriftPage UI)
-4. **Phase 3** — Document Intelligence (SQL query + two-panel UI)
-5. **Phase 4** — Agent Orchestration (backend route + Lakebase + approval UI)
-6. **Phase 5** — Genie chat framing (minimal changes to existing page)
-7. **Phase 6** — Polish (CSS vars, skeletons, error states, nav styling)
+3. **Phase 2.5** — Drift Analysis page (3 new gold tables → 3 SQL files → DriftPage UI) ✅
+4. **Phase 3** — Document Intelligence (SQL query + two-panel UI) ✅
+5. **Phase 3.5** — Portfolio Assistant chat + prefab prompt cache ✅
+6. **Phase 3.6** — Morning Briefing Bell (live `app_morning_briefings`) ✅
+7. **Phase 3.7** — Tech Stack page (`/tech-stack`) ✅
+8. **Phase 4** — Agent Orchestration (real client comms from `app_client_communications`) ✅
+9. **Phase 5** — Genie chat framing ✅
+10. **Phase 6** — Polish (GS navy, loading states, empty states) ✅ (partial)
 
 Run `npm run dev` after each phase to verify before proceeding.
 

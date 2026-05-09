@@ -65,7 +65,6 @@ export function AdvisorChat({
   const { send, stop, isStreaming, traceStatus } = useMasChat(isolated ? localOps : undefined);
 
   const allMessages = isolated ? localMessages : (activeConversation?.messages ?? []);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
 
   // Hidden context for the current pre-filled question — never rendered anywhere.
   const hiddenContextRef = useRef('');
@@ -89,7 +88,6 @@ export function AdvisorChat({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // allMessages defined above (isolated vs global)
   // While streaming, hide the in-progress assistant bubble — show only the
   // spinner until the full response is ready.
   const lastIsStreamingAssistant =

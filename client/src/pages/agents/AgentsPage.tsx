@@ -3,7 +3,7 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router';
 import { useAnalyticsQuery, Card, CardContent, Badge } from '@databricks/appkit-ui/react';
 import { sql } from '@databricks/appkit-ui/js';
 import { marked } from 'marked';
-import { CheckCircle2, Circle, ChevronDown, ChevronUp, CheckCheck, Pencil, Eye, MessageSquare } from 'lucide-react';
+import { CheckCircle2, Circle, ChevronDown, ChevronUp, CheckCheck, Pencil, Eye } from 'lucide-react';
 import { useAdvisor } from '../../contexts/AdvisorContext';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -56,6 +56,12 @@ const SIGNAL_META: Record<string, {
     detail: 'One or more client accounts have exceeded their maximum IPS allocation band',
     reallocation: { from_asset: 'Over-weight Asset Class', from_pct: 22, to_asset: 'Fixed Income', to_pct: 18, risk_impact: '−0.2%' },
   },
+  'Guidance Raise': {
+    title: 'OPPORTUNITY ALERT — Guidance Raised',
+    sub: 'American Tower Corporation (AMT) · Q1 2026 Earnings Call',
+    detail: 'Full-year AFFO and EBITDA guidance raised; strong operational performance and favorable FX tailwinds',
+    reallocation: { from_asset: 'Cash / Short-term', from_pct: 5, to_asset: 'Infrastructure REITs', to_pct: 7, risk_impact: '+0.2%' },
+  },
 };
 
 const SIGNAL_META_FALLBACK = {
@@ -64,6 +70,18 @@ const SIGNAL_META_FALLBACK = {
   detail: 'A high-severity signal was detected in your client portfolios',
   reallocation: { from_asset: 'Equities', from_pct: 20, to_asset: 'Fixed Income', to_pct: 16, risk_impact: '−0.3%' },
 };
+
+const SIGNAL_META_POSITIVE_FALLBACK = {
+  title: 'OPPORTUNITY ALERT — Positive Signal Detected',
+  sub: 'Portfolio opportunity identified',
+  detail: 'A positive market signal was detected in your client portfolios',
+  reallocation: { from_asset: 'Cash / Short-term', from_pct: 5, to_asset: 'Growth Equities', to_pct: 8, risk_impact: '+0.2%' },
+};
+
+function isPositiveSentiment(sentiment?: string): boolean {
+  const s = (sentiment ?? '').toLowerCase();
+  return s === 'positive' || s === 'improving';
+}
 
 // ── Dynamic agent cascade per signal type ────────────────────────────────────
 
@@ -93,6 +111,19 @@ function buildSignalAgents(signalType: string, symbol: string, clientCount: numb
       { id: 3, name: 'Client Personalization Agent',
         summary: `Drafted ${n} personalized communication${n !== 1 ? 's' : ''} in advisor tone.`,
         detail: `Generated individualized outreach using prior advisor–client correspondence. Each draft references the client's specific ${symbol} position size, current drift from IPS band, and a recommended action (hold/trim/exit). All drafts flagged for advisor review before send.` },
+    ];
+  }
+  if (signalType === 'Guidance Raise') {
+    return [
+      { id: 1, name: 'Research Agent',
+        summary: `Detected ${symbol} Q1 2026 guidance raise in earnings call transcript.`,
+        detail: `Parsed Q1 2026 earnings call transcript (Apr 28, 2026). Management raised full-year AFFO guidance, citing stronger-than-expected operational performance in the US tower segment. International revenue acceleration and favorable FX tailwinds contributed to the upward revision. Management maintained elevated conviction language throughout prepared remarks and Q&A. No one-time items obscuring the guidance raise.` },
+      { id: 2, name: 'Portfolio Construction Agent',
+        summary: `Found ${n} client account${n !== 1 ? 's' : ''} with ${symbol} exposure.`,
+        detail: `Scanned all client portfolios for ${symbol} holdings. Identified ${n} account${n !== 1 ? 's' : ''} with active positions. Cross-referenced each account's Infrastructure REIT and Real Assets IPS targets. The guidance raise and improved dividend coverage signal potential for continued appreciation. All accounts remain within IPS bands — no rebalancing required.` },
+      { id: 3, name: 'Client Personalization Agent',
+        summary: `Drafted ${n} personalized communication${n !== 1 ? 's' : ''} highlighting the positive development.`,
+        detail: `Generated individualized outreach for each client using prior advisor–client correspondence to match tone and style. Each draft highlights the guidance raise and its potential impact on the client's infrastructure exposure. Framed as a proactive positive update — no action required from clients. All drafts flagged for advisor review before send.` },
     ];
   }
   // Generic fallback for other signal types
@@ -241,6 +272,8 @@ function buildDriftCascade(rawRow: DriftRow) {
   };
 }
 
+type AlertRow = { signal_id: string; symbol: string; signal_type: string; sentiment?: string };
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export function AgentsPage() {
@@ -256,6 +289,15 @@ export function AgentsPage() {
   // signal_id comes from the URL (?signal_id=xxx) set by alert card draft comms buttons
   const signalId = searchParams.get('signal_id') ?? '';
 
+  // When visiting /agents with no signal_id, redirect to the top alert by severity
+  const { data: alertsData } = useAnalyticsQuery('alerts', advisorParams);
+  useEffect(() => {
+    if (!signalId && !isDrift && alertsData) {
+      const top = (alertsData as Array<{ signal_id: string }>)[0];
+      if (top) navigate(`/agents?signal_id=${encodeURIComponent(top.signal_id)}`, { replace: true });
+    }
+  }, [alertsData, signalId, isDrift]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const commsParams = { ...advisorParams, signal_id: sql.string(signalId) };
   const { data: commsData, loading: commsLoading } = useAnalyticsQuery(
     'client_communications',
@@ -264,7 +306,9 @@ export function AgentsPage() {
   const commsRows = (commsData ?? []) as unknown as CommRow[];
 
   const signalType = commsRows[0]?.signal_type ?? 'Earnings Miss';
-  const meta = SIGNAL_META[signalType] ?? SIGNAL_META_FALLBACK;
+  const currentAlertRow = (alertsData as AlertRow[] ?? []).find(r => r.signal_id === signalId);
+  const isPositiveAlert = !isDrift && isPositiveSentiment(currentAlertRow?.sentiment);
+  const meta = SIGNAL_META[signalType] ?? (isPositiveAlert ? SIGNAL_META_POSITIVE_FALLBACK : SIGNAL_META_FALLBACK);
 
   const affectedClients = commsRows.map((r) => ({
     name: r.client_name,
@@ -280,6 +324,7 @@ export function AgentsPage() {
   const [selectedClient, setSelectedClient] = useState(0);
   const [draftText, setDraftText] = useState('');
   const [approved, setApproved] = useState(false);
+  const [pillsReady, setPillsReady] = useState(false);
 
   // Stagger agent steps on mount
   useEffect(() => {
@@ -287,6 +332,22 @@ export function AgentsPage() {
       setTimeout(() => setVisibleSteps((v) => [...v, a.id]), i * 400);
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Animate pills in after content is ready
+  useEffect(() => {
+    const t = setTimeout(() => setPillsReady(true), 80);
+    return () => clearTimeout(t);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset interaction state when switching between alerts
+  useEffect(() => {
+    setApproved(false);
+    setSelectedClient(0);
+    setDraftText('');
+    setPillsReady(false);
+    const t = setTimeout(() => setPillsReady(true), 80);
+    return () => clearTimeout(t);
+  }, [signalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initialize draft once comms data loads
   useEffect(() => {
@@ -313,6 +374,13 @@ export function AgentsPage() {
     }
   }, [isDrift, commsRows.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Persist the drift row so the IPS pill can restore it after switching to a signal alert
+  useEffect(() => {
+    if (isDrift && driftState?.row) {
+      sessionStorage.setItem('awm_last_drift_row', JSON.stringify(driftState.row));
+    }
+  }, [isDrift]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const alertTitle = isDrift
     ? `IPS Drift Alert — ${driftState!.row!.drift_status}`
     : meta.title;
@@ -330,32 +398,99 @@ export function AgentsPage() {
   const dismissTarget = isDrift ? '/drift' : '/';
   const realloc = isDrift ? null : meta.reallocation;
 
-  if (!isDrift && !signalId) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 text-center text-muted-foreground">
-        <Eye className="w-8 h-8 opacity-30" />
-        <p className="text-sm font-medium">No alert selected</p>
-        <p className="text-xs max-w-xs">
-          Click the <MessageSquare className="inline w-3 h-3 mb-0.5" /> draft comms icon on any
-          alert in the Portfolio or Document Intelligence page to open it here.
-        </p>
-      </div>
-    );
+  const bs = isPositiveAlert ? {
+    outer: 'border-emerald-200 bg-emerald-50',
+    strip: 'border-emerald-100',
+    label: 'text-emerald-300',
+    dotPing: 'bg-emerald-400',
+    dotSolid: 'bg-emerald-500',
+    title: 'text-emerald-800',
+    sub: 'text-emerald-700',
+    detail: 'text-emerald-600',
+  } : {
+    outer: 'border-red-200 bg-red-50',
+    strip: 'border-red-100',
+    label: 'text-red-300',
+    dotPing: 'bg-red-400',
+    dotSolid: 'bg-red-500',
+    title: 'text-red-800',
+    sub: 'text-red-700',
+    detail: 'text-red-600',
+  };
+
+  if (!isDrift && (!signalId || (commsLoading && commsRows.length === 0))) {
+    return null;
   }
 
   return (
     <div className="space-y-5 max-w-[1400px]">
 
-      {/* Alert banner */}
-      <div className="flex items-start gap-4 p-4 rounded-lg border border-red-200 bg-red-50">
-        <div className="relative flex-shrink-0 mt-0.5">
-          <span className="absolute inline-flex h-3 w-3 rounded-full bg-red-400 opacity-75 animate-ping" />
-          <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500" />
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-red-800">{alertTitle}</p>
-          <p className="text-sm text-red-700 mt-0.5">{alertSub}</p>
-          <p className="text-xs text-red-600 mt-1">{alertDetail}</p>
+      {/* Alert banner with inline selector */}
+      <div className={`rounded-lg border ${bs.outer} overflow-hidden`}>
+
+        {/* Alert selector strip */}
+        {(alertsData as AlertRow[] ?? []).length > 0 && (
+          <div className={`flex items-center gap-1.5 px-4 py-2 border-b ${bs.strip}`}>
+            <span className={`text-[10px] font-semibold uppercase tracking-wider ${bs.label} mr-1 flex-shrink-0`}>Alerts</span>
+            <button
+              onClick={() => {
+                if (isDrift) return;
+                const stored = sessionStorage.getItem('awm_last_drift_row');
+                if (!stored) return;
+                const row = JSON.parse(stored) as DriftRow;
+                navigate(`/agents?signal_id=${encodeURIComponent(row.account_id)}`, {
+                  state: { trigger: 'ips_drift', row },
+                });
+              }}
+              style={{
+                opacity: pillsReady ? 1 : 0,
+                transform: pillsReady ? 'scale(1) translateY(0)' : 'scale(0.82) translateY(3px)',
+                transition: 'opacity 200ms ease 0ms, transform 200ms ease 0ms',
+              }}
+              className={`px-2 py-0.5 rounded text-xs font-semibold transition-colors ${
+                isDrift
+                  ? 'bg-red-600 text-white'
+                  : 'bg-white/60 text-red-700 hover:bg-white border border-red-200'
+              }`}
+            >
+              IPS
+            </button>
+            {(alertsData as AlertRow[]).map((a, i) => {
+              const isActive = a.signal_id === signalId;
+              const isPillPositive = isPositiveSentiment(a.sentiment);
+              return (
+                <button
+                  key={a.signal_id}
+                  onClick={() => navigate(`/agents?signal_id=${encodeURIComponent(a.signal_id)}`, { replace: true })}
+                  style={{
+                    opacity: pillsReady ? 1 : 0,
+                    transform: pillsReady ? 'scale(1) translateY(0)' : 'scale(0.82) translateY(3px)',
+                    transition: `opacity 200ms ease ${i * 55}ms, transform 200ms ease ${i * 55}ms`,
+                  }}
+                  className={`px-2 py-0.5 rounded text-xs font-semibold transition-colors ${
+                    isActive
+                      ? isPillPositive ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                      : isPillPositive ? 'bg-white/60 text-emerald-700 hover:bg-white border border-emerald-200' : 'bg-white/60 text-red-700 hover:bg-white border border-red-200'
+                  }`}
+                >
+                  {a.symbol}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Active alert details */}
+        <div className="flex items-start gap-4 p-4">
+          <div className="relative flex-shrink-0 mt-0.5">
+            <span className={`absolute inline-flex h-3 w-3 rounded-full ${bs.dotPing} opacity-75 animate-ping`} />
+            <span className={`relative inline-flex h-3 w-3 rounded-full ${bs.dotSolid}`} />
+          </div>
+          <div>
+            <p className={`text-sm font-semibold ${bs.title}`}>{alertTitle}</p>
+            <p className={`text-sm ${bs.sub} mt-0.5`}>{alertSub}</p>
+            <p className={`text-xs ${bs.detail} mt-1`}>{alertDetail}</p>
+          </div>
         </div>
       </div>
 
