@@ -291,6 +291,7 @@ export function AgentsPage() {
 
   // When visiting /agents with no signal_id, redirect to the top alert by severity
   const { data: alertsData } = useAnalyticsQuery('alerts', advisorParams);
+  const { data: driftData } = useAnalyticsQuery('account_drift', advisorParams);
   useEffect(() => {
     if (!signalId && !isDrift && alertsData) {
       const top = (alertsData as Array<{ signal_id: string }>)[0];
@@ -414,7 +415,7 @@ export function AgentsPage() {
     detail: 'text-red-600',
   };
 
-  if (!isDrift && (!signalId || (commsLoading && commsRows.length === 0))) {
+  if (!isDrift && !signalId) {
     return null;
   }
 
@@ -432,8 +433,10 @@ export function AgentsPage() {
               onClick={() => {
                 if (isDrift) return;
                 const stored = sessionStorage.getItem('awm_last_drift_row');
-                if (!stored) return;
-                const row = JSON.parse(stored) as DriftRow;
+                const row: DriftRow | null = stored
+                  ? JSON.parse(stored)
+                  : ((driftData as DriftRow[] | null)?.[0] ?? null);
+                if (!row) return;
                 navigate(`/agents?signal_id=${encodeURIComponent(row.account_id)}`, {
                   state: { trigger: 'ips_drift', row },
                 });
@@ -584,15 +587,14 @@ export function AgentsPage() {
                 </div>
               ) : (
                 <>
-                  {commsLoading && !isDrift ? (
-                    <div className="text-sm text-muted-foreground py-4 text-center">Loading draft…</div>
-                  ) : (
+                  <div className={`transition-opacity duration-200 ${commsLoading && !isDrift ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
                     <DraftViewer text={draftText} onChange={setDraftText} />
-                  )}
+                  </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setApproved(true)}
-                      className="flex-1 bg-[#1a3a5c] text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-[#1a3a5c]/90 transition-colors"
+                      disabled={commsLoading && !isDrift}
+                      className="flex-1 bg-[#1a3a5c] text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-[#1a3a5c]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Approve &amp; Send
                     </button>

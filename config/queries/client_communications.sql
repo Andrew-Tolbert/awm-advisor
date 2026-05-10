@@ -2,6 +2,7 @@
 -- @param signal_id  STRING
 -- Returns one row per affected client for the given signal.
 SELECT
+  now(), 
   cc.client_id,
   cc.client_name,
   ROUND(c.total_aum / 1e6, 1) AS aum_millions,

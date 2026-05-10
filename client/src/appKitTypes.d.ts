@@ -146,6 +146,8 @@ declare module "@databricks/appkit-ui/react" {
           signal_id: SQLStringMarker;
         };
         result: Array<{
+          /** @sqlType TIMESTAMP */
+          "now()": string;
           /** @sqlType STRING */
           client_id: string;
           /** @sqlType STRING */
