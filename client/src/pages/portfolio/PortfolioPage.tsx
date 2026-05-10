@@ -294,7 +294,8 @@ export function PortfolioPage() {
   }, [driftData, navigate]);
 
   const signalAlerts = useMemo<AlertItem[]>(() => {
-    const rows = (alertsData ?? []) as unknown as AlertSignalRow[];
+    const rows = ((alertsData ?? []) as unknown as AlertSignalRow[])
+      .filter(r => !r.signal_type?.startsWith('IPS'));
     const fmtExposure = (v: number) => {
       const n = Number(v);
       if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
@@ -313,7 +314,7 @@ export function PortfolioPage() {
         level,
         title: `${r.company_name} — ${r.signal_type}`,
         body: `${fmtExposure(r.total_exposure)} exposure · ${r.source_description}`,
-        onClick: () => navigate(`/documents?holding=${r.symbol}`),
+        onClick: () => navigate(`/documents?holding=${encodeURIComponent(r.symbol)}`),
       };
     });
   }, [alertsData, navigate]);
@@ -525,7 +526,7 @@ export function PortfolioPage() {
             <HoldingsTable
               data={holdings as unknown as Holding[]}
               loading={holdingsLoading}
-              onRowClick={(id) => navigate(`/documents?holding=${id}`)}
+              onRowClick={(id) => navigate(`/documents?holding=${encodeURIComponent(id)}`)}
               assetClassFilter={holdingsAssetFilter}
             />
           </CardContent>

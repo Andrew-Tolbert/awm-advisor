@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useNavigate, useLocation, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 import { useAnalyticsQuery, Card, CardContent, Badge } from '@databricks/appkit-ui/react';
 import { sql } from '@databricks/appkit-ui/js';
 import { marked } from 'marked';
@@ -278,26 +278,25 @@ type AlertRow = { signal_id: string; symbol: string; signal_type: string; sentim
 
 export function AgentsPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { params: advisorParams } = useAdvisor();
 
-  const driftState = (location.state as { trigger?: string; row?: DriftRow } | null);
-  const isDrift = driftState?.trigger === 'ips_drift' && driftState.row;
-  const driftCascade = isDrift ? buildDriftCascade(driftState.row!) : null;
-
-  // signal_id comes from the URL (?signal_id=xxx) set by alert card draft comms buttons
   const signalId = searchParams.get('signal_id') ?? '';
 
-  // When visiting /agents with no signal_id, redirect to the top alert by severity
+  // All alerts — including IPS breach entries — come from the alerts query.
   const { data: alertsData } = useAnalyticsQuery('alerts', advisorParams);
   const { data: driftData } = useAnalyticsQuery('account_drift', advisorParams);
+
+  // Redirect to top alert when signalId is absent or not present in alertsData.
   useEffect(() => {
-    if (!signalId && !isDrift && alertsData) {
-      const top = (alertsData as Array<{ signal_id: string }>)[0];
+    if (!alertsData) return;
+    const alerts = alertsData as Array<{ signal_id: string }>;
+    const isKnownSignal = signalId && alerts.some(a => a.signal_id === signalId);
+    if (!isKnownSignal) {
+      const top = alerts[0];
       if (top) navigate(`/agents?signal_id=${encodeURIComponent(top.signal_id)}`, { replace: true });
     }
-  }, [alertsData, signalId, isDrift]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [alertsData, signalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const commsParams = { ...advisorParams, signal_id: sql.string(signalId) };
   const { data: commsData, loading: commsLoading } = useAnalyticsQuery(
@@ -306,8 +305,18 @@ export function AgentsPage() {
   );
   const commsRows = (commsData ?? []) as unknown as CommRow[];
 
-  const signalType = commsRows[0]?.signal_type ?? 'Earnings Miss';
   const currentAlertRow = (alertsData as AlertRow[] ?? []).find(r => r.signal_id === signalId);
+  const signalType = commsRows[0]?.signal_type ?? currentAlertRow?.signal_type ?? 'Earnings Miss';
+
+  // IPS breach alerts are identified purely by signal_type from the data.
+  const isDrift = signalType.startsWith('IPS');
+  const driftRow = isDrift
+    ? ((driftData as DriftRow[] | null)?.find(r => r.account_id === signalId && r.drift_status === 'Over Band')
+      ?? (driftData as DriftRow[] | null)?.find(r => r.account_id === signalId))
+    ?? null
+    : null;
+  const driftCascade = driftRow ? buildDriftCascade(driftRow) : null;
+
   const isPositiveAlert = !isDrift && isPositiveSentiment(currentAlertRow?.sentiment);
   const meta = SIGNAL_META[signalType] ?? (isPositiveAlert ? SIGNAL_META_POSITIVE_FALLBACK : SIGNAL_META_FALLBACK);
 
@@ -320,7 +329,7 @@ export function AgentsPage() {
 
   const commsSignalId = commsRows[0]?.signal_id ?? '';
   const signalAgents = buildSignalAgents(signalType, commsRows[0]?.symbol ?? '', affectedClients.length);
-  const activeAgents = isDrift ? driftCascade!.agents : signalAgents;
+  const activeAgents = isDrift && driftCascade ? driftCascade.agents : signalAgents;
 
   const [visibleSteps, setVisibleSteps] = useState<number[]>([]);
   const [selectedClient, setSelectedClient] = useState(0);
@@ -353,45 +362,18 @@ export function AgentsPage() {
     return () => clearTimeout(t);
   }, [signalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync draft to the correct alert + client tab. Guard on commsSignalId so we
-  // never apply stale comms data from the previous alert while the new query loads.
+  // Sync draft whenever the loaded signal changes or the client tab changes.
   useEffect(() => {
-    if (isDrift || !commsSignalId || commsSignalId !== signalId) return;
+    if (!commsSignalId || commsSignalId !== signalId) return;
     setDraftText(affectedClients[selectedClient]?.draft ?? '');
   }, [signalId, selectedClient, commsSignalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Sync draft for drift mode — prefer AI-drafted markdown email when available,
-  // fall back to the programmatic draft while the query is still loading.
-  useEffect(() => {
-    if (!isDrift) return;
-    if (commsRows.length > 0) {
-      setDraftText(commsRows[0].email_draft);
-    } else if (driftCascade) {
-      setDraftText(driftCascade.draft);
-    }
-  }, [isDrift, commsRows.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Persist the drift row so the IPS pill can restore it after switching to a signal alert
-  useEffect(() => {
-    if (isDrift && driftState?.row) {
-      sessionStorage.setItem('awm_last_drift_row', JSON.stringify(driftState.row));
-    }
-  }, [isDrift]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const alertTitle = isDrift
-    ? `IPS Drift Alert — ${driftState!.row!.drift_status}`
-    : meta.title;
-  const alertSub = isDrift
-    ? `${driftState!.row!.client_name} · ${driftState!.row!.account_name}`
-    : meta.sub;
-  const alertDetail = isDrift
-    ? `${driftCascade!.trigger} · Detected ${driftCascade!.triggered_at}`
-    : meta.detail;
-  const draftLabel = isDrift
-    ? `Draft Communication — ${driftState!.row!.client_name}`
-    : affectedClients[selectedClient]
-      ? `Draft Communication — ${affectedClients[selectedClient].name}`
-      : 'Draft Communication';
+  const alertTitle = isDrift && driftRow ? `IPS Drift Alert — ${driftRow.drift_status}` : meta.title;
+  const alertSub   = isDrift && driftRow ? `${driftRow.client_name} · ${driftRow.account_name}` : meta.sub;
+  const alertDetail = isDrift && driftCascade ? `${driftCascade.trigger} · Detected ${driftCascade.triggered_at}` : meta.detail;
+  const draftLabel = affectedClients[selectedClient]
+    ? `Draft Communication — ${affectedClients[selectedClient].name}`
+    : 'Draft Communication';
   const dismissTarget = isDrift ? '/drift' : '/';
   const realloc = isDrift ? null : meta.reallocation;
 
@@ -415,9 +397,9 @@ export function AgentsPage() {
     detail: 'text-red-600',
   };
 
-  if (!isDrift && !signalId) {
-    return null;
-  }
+  // Hold off rendering until alertsData confirms the signalId is a real alert.
+  if (!alertsData || !signalId) return null;
+  if (!(alertsData as AlertRow[]).some(a => a.signal_id === signalId)) return null;
 
   return (
     <div className="space-y-5 max-w-[1400px]">
@@ -429,32 +411,6 @@ export function AgentsPage() {
         {(alertsData as AlertRow[] ?? []).length > 0 && (
           <div className={`flex items-center gap-1.5 px-4 py-2 border-b ${bs.strip}`}>
             <span className={`text-[10px] font-semibold uppercase tracking-wider ${bs.label} mr-1 flex-shrink-0`}>Alerts</span>
-            <button
-              onClick={() => {
-                if (isDrift) return;
-                const stored = sessionStorage.getItem('awm_last_drift_row');
-                const rows = driftData as DriftRow[] | null;
-                const row: DriftRow | null = stored
-                  ? JSON.parse(stored)
-                  : (rows?.find(r => r.drift_status === 'Over Band') ?? rows?.find(r => r.drift_status === 'Under Band') ?? null);
-                if (!row) return;
-                navigate(`/agents?signal_id=${encodeURIComponent(row.account_id)}`, {
-                  state: { trigger: 'ips_drift', row },
-                });
-              }}
-              style={{
-                opacity: pillsReady ? 1 : 0,
-                transform: pillsReady ? 'scale(1) translateY(0)' : 'scale(0.82) translateY(3px)',
-                transition: 'opacity 200ms ease 0ms, transform 200ms ease 0ms',
-              }}
-              className={`px-2 py-0.5 rounded text-xs font-semibold transition-colors ${
-                isDrift
-                  ? 'bg-red-600 text-white'
-                  : 'bg-white/60 text-red-700 hover:bg-white border border-red-200'
-              }`}
-            >
-              IPS
-            </button>
             {(alertsData as AlertRow[]).map((a, i) => {
               const isActive = a.signal_id === signalId;
               const isPillPositive = isPositiveSentiment(a.sentiment);
@@ -534,39 +490,37 @@ export function AgentsPage() {
         {/* ── Right: Human-in-the-loop ── */}
         <div className="space-y-4">
 
-          {/* Affected clients (non-drift mode only) */}
-          {!isDrift && (
-            <Card className="shadow-sm">
-              <CardContent className="pt-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Affected Clients ({commsLoading ? '…' : affectedClients.length})
-                </p>
-                {commsLoading ? (
-                  <div className="text-sm text-muted-foreground py-4 text-center">Loading…</div>
-                ) : (
-                  <div className="space-y-2">
-                    {affectedClients.map((c, i) => (
-                      <button
-                        key={c.name}
-                        onClick={() => setSelectedClient(i)}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition-colors ${
-                          selectedClient === i
-                            ? 'border-[#1a3a5c] bg-[#1a3a5c]/5 text-foreground'
-                            : 'border-border hover:bg-muted/50 text-muted-foreground'
-                        }`}
-                      >
-                        <span className="font-medium">{c.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="tabular-nums text-muted-foreground">${c.aum_millions}M</span>
-                          <Badge variant="outline" className="text-[10px] py-0">{c.tier}</Badge>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          {/* Affected clients */}
+          <Card className="shadow-sm">
+            <CardContent className="pt-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Affected Clients ({commsLoading ? '…' : affectedClients.length})
+              </p>
+              {commsLoading ? (
+                <div className="text-sm text-muted-foreground py-4 text-center">Loading…</div>
+              ) : (
+                <div className="space-y-2">
+                  {affectedClients.map((c, i) => (
+                    <button
+                      key={c.name}
+                      onClick={() => setSelectedClient(i)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm transition-colors ${
+                        selectedClient === i
+                          ? 'border-[#1a3a5c] bg-[#1a3a5c]/5 text-foreground'
+                          : 'border-border hover:bg-muted/50 text-muted-foreground'
+                      }`}
+                    >
+                      <span className="font-medium">{c.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="tabular-nums text-muted-foreground">${c.aum_millions}M</span>
+                        <Badge variant="outline" className="text-[10px] py-0">{c.tier}</Badge>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Draft communication */}
           <Card className="shadow-sm">
