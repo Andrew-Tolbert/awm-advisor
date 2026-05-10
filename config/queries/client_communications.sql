@@ -2,7 +2,6 @@
 -- @param signal_id  STRING
 -- Returns one row per affected client for the given signal.
 SELECT
-  now(), 
   cc.client_id,
   cc.client_name,
   ROUND(c.total_aum / 1e6, 1) AS aum_millions,
@@ -15,8 +14,8 @@ JOIN       ahtsa.awm.clients                   c  ON  c.client_id  = cc.client_i
 WHERE  cc.advisor_id = :advisor_id
   AND  cc.signal_id  = :signal_id
   AND  cc.status     = 'success'
-  AND  cc.run_date   = (
-         SELECT MAX(run_date)
+  AND  cc.generated_at = (
+         SELECT MAX(generated_at)
          FROM   ahtsa.awm.app_client_communications
          WHERE  advisor_id = :advisor_id
            AND  signal_id  = :signal_id

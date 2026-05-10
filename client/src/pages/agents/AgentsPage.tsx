@@ -433,9 +433,10 @@ export function AgentsPage() {
               onClick={() => {
                 if (isDrift) return;
                 const stored = sessionStorage.getItem('awm_last_drift_row');
+                const rows = driftData as DriftRow[] | null;
                 const row: DriftRow | null = stored
                   ? JSON.parse(stored)
-                  : ((driftData as DriftRow[] | null)?.[0] ?? null);
+                  : (rows?.find(r => r.drift_status === 'Over Band') ?? rows?.find(r => r.drift_status === 'Under Band') ?? null);
                 if (!row) return;
                 navigate(`/agents?signal_id=${encodeURIComponent(row.account_id)}`, {
                   state: { trigger: 'ips_drift', row },
