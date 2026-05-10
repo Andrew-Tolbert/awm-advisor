@@ -493,9 +493,9 @@ export function DriftPage() {
           ) : filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-10">No rows match filters</p>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(20*2.25rem+2.5rem)]">
               <table className="w-full text-xs min-w-[700px]">
-                <thead>
+                <thead className="sticky top-0 z-10 bg-background">
                   <tr className="border-b">
                     {th('Client', 'client_name', 'left')}
                     {th('Account', 'account_name', 'left')}

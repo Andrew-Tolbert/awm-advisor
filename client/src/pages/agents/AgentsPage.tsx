@@ -317,6 +317,7 @@ export function AgentsPage() {
     draft: r.email_draft,
   }));
 
+  const commsSignalId = commsRows[0]?.signal_id ?? '';
   const signalAgents = buildSignalAgents(signalType, commsRows[0]?.symbol ?? '', affectedClients.length);
   const activeAgents = isDrift ? driftCascade!.agents : signalAgents;
 
@@ -326,12 +327,13 @@ export function AgentsPage() {
   const [approved, setApproved] = useState(false);
   const [pillsReady, setPillsReady] = useState(false);
 
-  // Stagger agent steps on mount
+  // Stagger agent steps — replay whenever the loaded signal data changes
   useEffect(() => {
+    setVisibleSteps([]);
     activeAgents.forEach((a, i) => {
       setTimeout(() => setVisibleSteps((v) => [...v, a.id]), i * 400);
     });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [commsSignalId, isDrift ? 'drift' : 'signal']); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Animate pills in after content is ready
   useEffect(() => {
@@ -344,24 +346,18 @@ export function AgentsPage() {
     setApproved(false);
     setSelectedClient(0);
     setDraftText('');
+    setVisibleSteps([]);
     setPillsReady(false);
     const t = setTimeout(() => setPillsReady(true), 80);
     return () => clearTimeout(t);
   }, [signalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Initialize draft once comms data loads
+  // Sync draft to the correct alert + client tab. Guard on commsSignalId so we
+  // never apply stale comms data from the previous alert while the new query loads.
   useEffect(() => {
-    if (!isDrift && affectedClients.length > 0 && !draftText) {
-      setDraftText(affectedClients[0].draft);
-    }
-  }, [affectedClients.length, isDrift]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Sync draft when client tab changes (non-drift mode)
-  useEffect(() => {
-    if (!isDrift && affectedClients.length > 0) {
-      setDraftText(affectedClients[selectedClient]?.draft ?? '');
-    }
-  }, [selectedClient, isDrift]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (isDrift || !commsSignalId || commsSignalId !== signalId) return;
+    setDraftText(affectedClients[selectedClient]?.draft ?? '');
+  }, [signalId, selectedClient, commsSignalId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync draft for drift mode — prefer AI-drafted markdown email when available,
   // fall back to the programmatic draft while the query is still loading.
