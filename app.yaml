@@ -8,3 +8,5 @@ env:
     valueFrom: genie-space
   - name: LAKEBASE_ENDPOINT
     valueFrom: postgres
+  - name: MAS_ENDPOINT_NAME
+    valueFrom: serving-endpoint

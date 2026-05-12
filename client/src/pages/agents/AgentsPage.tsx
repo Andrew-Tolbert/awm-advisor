@@ -542,13 +542,13 @@ export function AgentsPage() {
                 </div>
               ) : (
                 <>
-                  <div className={`transition-opacity duration-200 ${commsLoading && !isDrift ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+                  <div className={`transition-opacity duration-200 ${commsLoading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
                     <DraftViewer text={draftText} onChange={setDraftText} />
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => setApproved(true)}
-                      disabled={commsLoading && !isDrift}
+                      disabled={commsLoading}
                       className="flex-1 bg-[#1a3a5c] text-white text-sm font-medium py-2 px-4 rounded-md hover:bg-[#1a3a5c]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Approve &amp; Send
@@ -566,7 +566,7 @@ export function AgentsPage() {
           </Card>
 
           {/* Re-allocation scenario (non-drift mode only) */}
-          {!isDrift && realloc && (
+          {realloc && (
             <Card className="shadow-sm">
               <CardContent className="pt-5 space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Re-Allocation Scenario</p>

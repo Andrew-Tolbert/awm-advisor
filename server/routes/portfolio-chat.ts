@@ -7,7 +7,7 @@ interface AppKitWithServer {
   analytics: Parameters<typeof answerCache.put>[0]['analytics'];
 }
 
-const ENDPOINT_NAME = 'mas-af54fe47-endpoint';
+const ENDPOINT_NAME = process.env.MAS_ENDPOINT_NAME ?? 'mas-97033e33-endpoint';
 const SOURCE = 'mas-supervisor';
 
 interface ChatMessage {
