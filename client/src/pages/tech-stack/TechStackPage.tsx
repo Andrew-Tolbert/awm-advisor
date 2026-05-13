@@ -63,7 +63,7 @@ const STACK_ITEMS: StackItem[] = [
   {
     name: 'Unity Catalog',
     category: 'Governance & Lineage',
-    description: 'End-to-end data lineage across the AWM Lakehouse — trace any column from bronze ingestion through gold tables and into the app.',
+    description: 'End-to-end data lineage across the Meridian Lakehouse — trace any column from bronze ingestion through gold tables and into the app.',
     href: 'https://e2-demo-field-eng.cloud.databricks.com/explore/data/ahtsa/awm/clients?o=1444828305810485&activeTab=lineage',
     icon: Database,
     accent: 'from-rose-500/15 to-rose-500/5 text-rose-600',
@@ -81,7 +81,7 @@ export function TechStackPage() {
           </p>
           <h1 className="text-2xl font-semibold text-foreground mt-1">Tech Stack</h1>
           <p className="text-sm text-muted-foreground mt-1.5 max-w-2xl">
-            The Databricks components, services, and infrastructure powering the AWM Advisor experience.
+            The Databricks components, services, and infrastructure powering the Meridian Advisor Intelligence experience.
             Click any tile to jump straight to its workspace asset.
           </p>
         </div>

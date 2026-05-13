@@ -26,19 +26,17 @@ function Sidebar() {
     >
       {/* Logo header */}
       <div className="relative h-[86px] flex-shrink-0 overflow-hidden">
-        {/* Collapsed: tiny Goldman wordmark */}
-        <img
-          src="/goldman-white-letters.png"
-          alt="Goldman Sachs"
-          className="absolute inset-y-0 left-0 w-[75px] h-full object-contain p-3 opacity-100 group-hover:opacity-0 transition-opacity duration-300 ease-in-out"
-        />
-        {/* Expanded: full Goldman wordmark */}
-        <img
-          src="/goldman-white-letters.png"
-          alt=""
-          aria-hidden
-          className="absolute inset-0 h-full w-[280px] object-contain p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out"
-        />
+        {/* Collapsed: MWP monogram */}
+        <div className="absolute inset-y-0 left-0 w-[75px] h-full flex items-center justify-center opacity-100 group-hover:opacity-0 transition-opacity duration-300 ease-in-out">
+          <div className="flex flex-col items-center leading-none">
+            <span className="text-white font-bold text-[11px] tracking-[0.18em]">MWP</span>
+          </div>
+        </div>
+        {/* Expanded: full wordmark */}
+        <div className="absolute inset-0 h-full w-[280px] flex flex-col justify-center px-5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 ease-in-out">
+          <span className="text-white font-semibold text-[15px] tracking-[0.08em] leading-none">MERIDIAN</span>
+          <span className="text-white/60 text-[10px] tracking-[0.18em] uppercase mt-[5px]">Wealth Partners</span>
+        </div>
       </div>
 
       {/* Nav */}

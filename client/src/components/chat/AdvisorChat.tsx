@@ -164,7 +164,7 @@ export function AdvisorChat({
             <Sparkles size={22} className="text-[#0E1928]" />
           </div>
           <div className="space-y-1">
-            <h3 className="text-lg font-semibold text-foreground">Ask the AWM Advisor</h3>
+            <h3 className="text-lg font-semibold text-foreground">Ask the Wealth Advisor</h3>
             <p className="text-sm text-muted-foreground">
               Routes through the multi-agent supervisor — combines Genie SQL with the Knowledge
               Assistant for filings, transcripts, and signals.

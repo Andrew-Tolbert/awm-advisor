@@ -23,7 +23,7 @@ export function GeniePage() {
       <div>
         <h2 className="text-2xl font-semibold tracking-tight text-foreground">Advisor Chat</h2>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Powered by the AWM multi-agent supervisor — Genie SQL plus the Knowledge Assistant for
+          Powered by the multi-agent supervisor — Genie SQL plus the Knowledge Assistant for
           filings, transcripts, and signals.
         </p>
       </div>
